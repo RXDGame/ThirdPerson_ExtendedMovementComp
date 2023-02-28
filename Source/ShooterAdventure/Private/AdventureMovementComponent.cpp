@@ -163,13 +163,6 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 		return;
 	}
 
-	if (!UpdatedComponent->IsQueryCollisionEnabled())
-	{
-		ExitRoll();
-		StartNewPhysics(deltaTime, Iterations);
-		return;
-	}
-	
 	bJustTeleported = false;
 	bool bCheckedFall = false;
 	bool bTriedLedgeMove = false;
@@ -188,8 +181,6 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 		const FVector PreviousBaseLocation = (OldBase != NULL) ? OldBase->GetComponentLocation() : FVector::ZeroVector;
 		const FVector OldLocation = UpdatedComponent->GetComponentLocation();
 		const FFindFloorResult OldFloor = CurrentFloor;
-
-		RestorePreAdditiveRootMotionVelocity();
 
 		// Ensure velocity is horizontal.
 		MaintainHorizontalGroundVelocity();
@@ -302,18 +293,6 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 			// Validate the floor check
 			if (CurrentFloor.IsWalkableFloor())
 			{
-				if (ShouldCatchAir(OldFloor, CurrentFloor))
-				{
-					HandleWalkingOffLedge(OldFloor.HitResult.ImpactNormal, OldFloor.HitResult.Normal, OldLocation, timeTick);
-					if (IsMovingOnGround())
-					{
-						// If still walking, then fall. If not, assume the user set a different mode they want to keep.
-						StartFalling(Iterations, remainingTime, timeTick, Delta, OldLocation);
-						ExitRoll();
-					}
-					return;
-				}
-
 				AdjustFloorHeight();
 				SetBase(CurrentFloor.HitResult.Component.Get(), CurrentFloor.HitResult.BoneName);
 			}
@@ -494,6 +473,16 @@ bool UAdventureMovementComponent::IsMovingOnGround() const
 bool UAdventureMovementComponent::CanCrouchInCurrentState() const
 {
 	return Super::CanCrouchInCurrentState() || IsMovingOnGround();
+}
+
+bool UAdventureMovementComponent::CanWalkOffLedges() const
+{
+	if(IsCrouching() && IsCustomMovementMode(CMOVE_Roll))
+	{
+		return bCanWalkOffLedgeWhenRolling;
+	}
+	
+	return Super::CanWalkOffLedges();
 }
 
 void UAdventureMovementComponent::UpdateCharacterStateAfterMovement(float DeltaSeconds)

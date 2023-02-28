@@ -85,6 +85,8 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollTimeDuration = 1.3f;
 	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollSpeed = 600.f;
 	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollGravityForce = 8000.f;
+	UPROPERTY(EditDefaultsOnly, Category=Roll) bool bCanWalkOffLedgeWhenRolling = true;
+	
 	float RollTime;
 	FVector RollDirection;
 	
@@ -95,6 +97,7 @@ public:
 	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
 	virtual bool IsMovingOnGround() const override;
 	virtual bool CanCrouchInCurrentState() const override;
+	virtual bool CanWalkOffLedges() const override;
 
 protected:
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
