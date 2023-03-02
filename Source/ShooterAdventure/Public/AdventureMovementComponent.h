@@ -26,8 +26,15 @@ class SHOOTERADVENTURE_API UAdventureMovementComponent : public UCharacterMoveme
 	GENERATED_BODY()
 
 	class FSavedMove_Adventure : public FSavedMove_Character
-	{
-		typedef FSavedMove_Character Super;
+	{		
+	public:
+		enum CompressedFlags
+		{
+			FLAG_Sprint			= 0x10,
+			FLAG_Custom_1		= 0x20,
+			FLAG_Custom_2		= 0x40,
+			FLAG_Custom_3		= 0x80,			
+		};
 		
 		//Flag
 		uint8 Saved_bWantsToSprint : 1;
@@ -35,7 +42,6 @@ class SHOOTERADVENTURE_API UAdventureMovementComponent : public UCharacterMoveme
 		// Not flag
 		uint8 Saved_bPreviousWantstoCrouch:1;
 		
-	public:
 		virtual bool CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const override;
 		virtual void Clear() override;
 		virtual uint8 GetCompressedFlags() const override; 
@@ -53,14 +59,13 @@ class SHOOTERADVENTURE_API UAdventureMovementComponent : public UCharacterMoveme
 		virtual FSavedMovePtr AllocateNewMove() override;
 	};
 
-	UPROPERTY(EditDefaultsOnly) float Sprint_MaxWalkSpeed;
-	UPROPERTY(EditDefaultsOnly) float Walk_MaxWalkSpeed;
+	UPROPERTY(EditDefaultsOnly, Category=Sprint) float MaxSprintSpeed;
 
-	UPROPERTY(EditDefaultsOnly, Category=Slide) float Slide_MinSpeed = 300.f;
+	UPROPERTY(EditDefaultsOnly, Category=Slide) float MaxSlideSpeed = 300.f;
 	UPROPERTY(EditDefaultsOnly, Category=Slide) float Slide_EnterImpulse = 500.f;
 	UPROPERTY(EditDefaultsOnly, Category=Slide) float Slide_GravityForce = 5000.f;
 	UPROPERTY(EditDefaultsOnly, Category=Slide) float Slide_Friction = 1.3f;	
-	UPROPERTY(EditDefaultsOnly, Category=Slide) float Slide_MinAngleToSlide = 60.f;
+	UPROPERTY(EditDefaultsOnly, Category=Slide) float BrakingDecelerationSliding = 500.f;
 
 	// Transient
 	UPROPERTY(Transient) AShooterAdventureCharacter* AdventureCharacterOwner;
@@ -73,7 +78,6 @@ public:
 	UAdventureMovementComponent();
 
 	virtual void InitializeComponent() override;
-	void EnterRoll();
 	
 private:
 	void EnterSlide();
@@ -81,30 +85,42 @@ private:
 	void PhysSlide(float deltaTime, int32 Iterations);
 	bool GetSlideSurface(FHitResult& Hit) const;
 
-	// Roll
+// ROLL
+public:	
+	void EnterRoll();
+	
+private:
 	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollTimeDuration = 1.3f;
-	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollSpeed = 600.f;
-	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollGravityForce = 8000.f;
+	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollDelayBetweenRolls = 0.25f;
+	UPROPERTY(EditDefaultsOnly, Category=Roll) float MaxRollSpeed = 600.f;
+	UPROPERTY(EditDefaultsOnly, Category=Roll) float BrakingDecelerationRolling = 2000.f;
 	UPROPERTY(EditDefaultsOnly, Category=Roll) bool bCanWalkOffLedgeWhenRolling = true;
 	
 	float RollTime;
 	FVector RollDirection;
+	bool bHasRollRecently;
+	FTimerHandle RollResetTimerHandle;
 	
 	void ExitRoll();
 	void PhysRoll(float deltaTime, int32 Iterations);
+	bool CanRoll() const;
+	void ResetRoll();
 
 public:
 	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
 	virtual bool IsMovingOnGround() const override;
 	virtual bool CanCrouchInCurrentState() const override;
 	virtual bool CanWalkOffLedges() const override;
+	virtual float GetMaxSpeed() const override;
+	virtual float GetMaxBrakingDeceleration() const override;
 
 protected:
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
 	virtual void OnMovementUpdated(float DeltaSeconds, const FVector& OldLocation, const FVector& OldVelocity) override;
 	
 	virtual void UpdateCharacterStateAfterMovement(float DeltaSeconds) override;
-	virtual  void PhysCustom(float deltaTime, int32 Iterations) override;
+	virtual void PhysCustom(float deltaTime, int32 Iterations) override;
+	virtual void OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode) override;
 
 public:
 	UFUNCTION(BlueprintCallable) void Sprint();

@@ -128,18 +128,21 @@ void UAdventureMovementComponent::EnterRoll()
 	
 	SetMovementMode(MOVE_Custom,CMOVE_Roll);
 
-	CharacterOwner->AddActorLocalOffset(CrouchedHalfHeight * FVector::DownVector, false);
+	CharacterOwner->AddActorLocalOffset(GetCrouchedHalfHeight() * FVector::DownVector, false);
 }
 
 void UAdventureMovementComponent::ExitRoll()
 {
 	bWantsToCrouch = false;
+	bHasRollRecently = true;
 
 	const FQuat NewRotation = FRotationMatrix::MakeFromXZ(UpdatedComponent->GetForwardVector().GetSafeNormal2D(),
 															FVector::UpVector).ToQuat();
 	FHitResult Hit;
 	SafeMoveUpdatedComponent(FVector::ZeroVector, NewRotation, true, Hit);
 	SetMovementMode(IsFalling() ? MOVE_Falling : MOVE_Walking);
+
+	GetWorld()->GetTimerManager().SetTimer(RollResetTimerHandle, this, &UAdventureMovementComponent::ResetRoll, RollDelayBetweenRolls);
 }
 
 void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
@@ -205,7 +208,7 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 		}
 
 		// Compute move parameters
-		const FVector MoveVelocity = RollDirection * RollSpeed;
+		const FVector MoveVelocity = RollDirection * MaxRollSpeed;
 		const FVector Delta = timeTick * MoveVelocity;
 		const bool bZeroDelta = Delta.IsNearlyZero();
 		FStepDownResult StepDownResult;
@@ -364,6 +367,16 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 	}
 }
 
+bool UAdventureMovementComponent::CanRoll() const
+{
+	return !bHasRollRecently && MovementMode == MOVE_Walking;
+}
+
+void UAdventureMovementComponent::ResetRoll()
+{
+	bHasRollRecently = false;
+}
+
 #pragma region Saved Variables - Server-Client
 
 bool UAdventureMovementComponent::FSavedMove_Adventure::CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const
@@ -386,9 +399,9 @@ void UAdventureMovementComponent::FSavedMove_Adventure::Clear()
 
 uint8 UAdventureMovementComponent::FSavedMove_Adventure::GetCompressedFlags() const
 {
-	uint8 Result = Super::GetCompressedFlags();
+	uint8 Result = FSavedMove_Character::GetCompressedFlags();
 
-	if (Saved_bWantsToSprint) Result |= FLAG_Custom_0;
+	if (Saved_bWantsToSprint) Result |= FLAG_Sprint;
 
 	return Result;
 }
@@ -451,11 +464,6 @@ void UAdventureMovementComponent::OnMovementUpdated(float DeltaSeconds, const FV
 {
 	Super::OnMovementUpdated(DeltaSeconds, OldLocation, OldVelocity);
 
-	if (MovementMode == MOVE_Walking)
-	{
-		MaxWalkSpeed = Safe_bWantsToSprint ? Sprint_MaxWalkSpeed : Walk_MaxWalkSpeed;
-	}
-
 	FHitResult HitResult;
 	if(GetSlideSurface(HitResult))
 	{
@@ -485,6 +493,49 @@ bool UAdventureMovementComponent::CanWalkOffLedges() const
 	return Super::CanWalkOffLedges();
 }
 
+float UAdventureMovementComponent::GetMaxSpeed() const
+{
+	if(MovementMode == MOVE_Walking && Safe_bWantsToSprint && !IsCrouching())
+	{
+		return MaxSprintSpeed;
+	}
+
+	if(MovementMode != MOVE_Custom)
+	{
+		return Super::GetMaxSpeed();
+	}
+
+	switch (CustomMovementMode)
+	{
+	case CMOVE_Slide:
+		return MaxSlideSpeed;
+	case  CMOVE_Roll:
+		return MaxRollSpeed;
+	default:
+		UE_LOG(LogTemp, Fatal, TEXT("Invalid custom movement mode"));
+		return -1.f;
+	}
+}
+
+float UAdventureMovementComponent::GetMaxBrakingDeceleration() const
+{
+	if(MovementMode != MOVE_Custom)
+	{
+		return Super::GetMaxBrakingDeceleration();
+	}
+
+	switch (CustomMovementMode)
+	{
+	case CMOVE_Slide:
+		return BrakingDecelerationSliding;
+	case  CMOVE_Roll:
+		return BrakingDecelerationRolling;
+	default:
+		UE_LOG(LogTemp, Fatal, TEXT("Invalid custom movement mode"));
+		return -1.f;
+	}
+}
+
 void UAdventureMovementComponent::UpdateCharacterStateAfterMovement(float DeltaSeconds)
 {
 	Super::UpdateCharacterStateAfterMovement(DeltaSeconds);
@@ -511,6 +562,16 @@ void UAdventureMovementComponent::PhysCustom(float deltaTime, int32 Iterations)
 	default:
 		UE_LOG(LogTemp, Fatal, TEXT("Invalid Custom Movement Mode"));
 	}
+}
+
+void UAdventureMovementComponent::OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode)
+{
+	if(PreviousCustomMode == MOVE_Custom && PreviousCustomMode == CMOVE_Roll)
+	{
+		ExitRoll();
+	}	
+	
+	Super::OnMovementModeChanged(PreviousMovementMode, PreviousCustomMode);
 }
 
 void UAdventureMovementComponent::Sprint()
