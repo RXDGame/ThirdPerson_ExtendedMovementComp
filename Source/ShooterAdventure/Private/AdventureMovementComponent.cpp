@@ -119,16 +119,15 @@ bool UAdventureMovementComponent::GetSlideSurface(FHitResult& Hit) const
 	return false;//GetWorld()->LineTraceSingleByProfile(Hit, Start, End, ProfileName, AdventureCharacterOwner->GetIgnoreCharacterParam());
 }
 
-void UAdventureMovementComponent::EnterRoll()
+void UAdventureMovementComponent::EnterRoll(EMovementMode PreviousMovementMode, ECustomMovementMode PreviousCustomMode)
 {
 	bWantsToCrouch = true;
+	bCrouchMaintainsBaseLocation = true;
 	
 	RollDirection = Acceleration.GetSafeNormal2D().IsNearlyZero() ? CharacterOwner->GetActorForwardVector() : Acceleration.GetSafeNormal2D();
 	RollTime = RollTimeDuration;
-	
-	SetMovementMode(MOVE_Custom,CMOVE_Roll);
 
-	CharacterOwner->AddActorLocalOffset(GetCrouchedHalfHeight() * FVector::DownVector, false);
+	FindFloor(UpdatedComponent->GetComponentLocation(), CurrentFloor, true, nullptr);
 }
 
 void UAdventureMovementComponent::ExitRoll()
@@ -140,7 +139,6 @@ void UAdventureMovementComponent::ExitRoll()
 															FVector::UpVector).ToQuat();
 	FHitResult Hit;
 	SafeMoveUpdatedComponent(FVector::ZeroVector, NewRotation, true, Hit);
-	SetMovementMode(IsFalling() ? MOVE_Falling : MOVE_Walking);
 
 	GetWorld()->GetTimerManager().SetTimer(RollResetTimerHandle, this, &UAdventureMovementComponent::ResetRoll, RollDelayBetweenRolls);
 }
@@ -152,10 +150,10 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 		return;
 	}
 
-	RollTime-= deltaTime;
+	RollTime -= deltaTime;
 	if(RollTime <= 0)
 	{
-		ExitRoll();
+		SetMovementMode(MOVE_Walking);
 		return;
 	}
 
@@ -181,7 +179,7 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 
 		// Save current values
 		UPrimitiveComponent * const OldBase = GetMovementBase();
-		const FVector PreviousBaseLocation = (OldBase != NULL) ? OldBase->GetComponentLocation() : FVector::ZeroVector;
+		const FVector PreviousBaseLocation = (OldBase != nullptr) ? OldBase->GetComponentLocation() : FVector::ZeroVector;
 		const FVector OldLocation = UpdatedComponent->GetComponentLocation();
 		const FFindFloorResult OldFloor = CurrentFloor;
 
@@ -203,7 +201,6 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 			// Root motion could have put us into Falling.
 			// No movement has taken place this movement tick so we pass on full time/past iteration count
 			StartNewPhysics(remainingTime+timeTick, Iterations-1);
-			ExitRoll();
 			return;
 		}
 
@@ -231,7 +228,7 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 					const float ActualDist = (UpdatedComponent->GetComponentLocation() - OldLocation).Size2D();
 					remainingTime += timeTick * (1.f - FMath::Min(1.f,ActualDist/DesiredDist));
 				}
-				ExitRoll();
+				
 				StartNewPhysics(remainingTime,Iterations);
 				return;
 			}
@@ -313,7 +310,6 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 			// check if just entered water
 			if ( IsSwimming() )
 			{
-				ExitRoll();
 				StartSwimming(OldLocation, Velocity, timeTick, remainingTime, Iterations);
 				return;
 			}
@@ -324,7 +320,6 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 				const bool bMustJump = bJustTeleported || bZeroDelta || (OldBase == NULL || (!OldBase->IsQueryCollisionEnabled() && MovementBaseUtility::IsDynamicBase(OldBase)));
 				if ((bMustJump || !bCheckedFall) && CheckFall(OldFloor, CurrentFloor.HitResult, Delta, OldLocation, remainingTime, timeTick, Iterations, bMustJump) )
 				{
-					ExitRoll();
 					return;
 				}
 				bCheckedFall = true;
@@ -360,11 +355,6 @@ void UAdventureMovementComponent::PhysRoll(float deltaTime, int32 Iterations)
 	FHitResult Hit;
 	FQuat NewRotation = FRotationMatrix::MakeFromXZ(RollDirection, FVector::UpVector).ToQuat();
 	SafeMoveUpdatedComponent(FVector::ZeroVector, NewRotation, false, Hit);
-
-	if(IsFalling())
-	{
-		ExitRoll();
-	}
 }
 
 bool UAdventureMovementComponent::CanRoll() const
@@ -375,6 +365,11 @@ bool UAdventureMovementComponent::CanRoll() const
 void UAdventureMovementComponent::ResetRoll()
 {
 	bHasRollRecently = false;
+}
+
+void UAdventureMovementComponent::Server_EnterRoll_Implementation()
+{
+	Safe_bWantsToRoll = true;
 }
 
 #pragma region Saved Variables - Server-Client
@@ -409,10 +404,11 @@ uint8 UAdventureMovementComponent::FSavedMove_Adventure::GetCompressedFlags() co
 void UAdventureMovementComponent::FSavedMove_Adventure::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel, FNetworkPredictionData_Client_Character& ClientData)
 {
 	FSavedMove_Character::SetMoveFor(C, InDeltaTime, NewAccel, ClientData);
-	
-	UAdventureMovementComponent* CharacterMovement = Cast<UAdventureMovementComponent>(C->GetCharacterMovement());
+
+	const UAdventureMovementComponent* CharacterMovement = Cast<UAdventureMovementComponent>(C->GetCharacterMovement());
 	Saved_bWantsToSprint = CharacterMovement->Safe_bWantsToSprint;
 	Saved_bPreviousWantstoCrouch = CharacterMovement->Safe_bPreviousWantsToCrouch;
+	Saved_bWantstoRoll = CharacterMovement->Safe_bWantsToRoll;
 }
 
 void UAdventureMovementComponent::FSavedMove_Adventure::PrepMoveFor(ACharacter* C)
@@ -422,6 +418,7 @@ void UAdventureMovementComponent::FSavedMove_Adventure::PrepMoveFor(ACharacter* 
 	UAdventureMovementComponent* CharacterMovement = Cast<UAdventureMovementComponent>(C->GetCharacterMovement());
 	CharacterMovement->Safe_bWantsToSprint = Saved_bWantsToSprint;
 	CharacterMovement->Safe_bPreviousWantsToCrouch = Saved_bPreviousWantstoCrouch;
+	CharacterMovement->Safe_bWantsToRoll = Saved_bWantstoRoll;
 }
 
 UAdventureMovementComponent::FNetworkPredictionData_Client_Adventure::FNetworkPredictionData_Client_Adventure(const UCharacterMovementComponent& ClientMovement)
@@ -458,7 +455,23 @@ void UAdventureMovementComponent::UpdateFromCompressedFlags(uint8 Flags)
 
 	Safe_bWantsToSprint = (Flags & FSavedMove_Character::FLAG_Custom_0) != 0;
 }
+
 #pragma endregion 
+
+void UAdventureMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
+{
+	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
+
+	if(Safe_bWantsToRoll)
+	{
+		if(CanRoll())
+		{
+			SetMovementMode(MOVE_Custom, CMOVE_Roll);
+			if(!CharacterOwner->HasAuthority()) Server_EnterRoll();
+		}
+		Safe_bWantsToRoll = false;
+	}
+}
 
 void UAdventureMovementComponent::OnMovementUpdated(float DeltaSeconds, const FVector& OldLocation, const FVector& OldVelocity)
 {
@@ -565,13 +578,18 @@ void UAdventureMovementComponent::PhysCustom(float deltaTime, int32 Iterations)
 }
 
 void UAdventureMovementComponent::OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode)
-{
-	if(PreviousCustomMode == MOVE_Custom && PreviousCustomMode == CMOVE_Roll)
+{	
+	Super::OnMovementModeChanged(PreviousMovementMode, PreviousCustomMode);
+	
+	if(PreviousMovementMode == MOVE_Custom && PreviousCustomMode == CMOVE_Roll)
 	{
 		ExitRoll();
-	}	
-	
-	Super::OnMovementModeChanged(PreviousMovementMode, PreviousCustomMode);
+	}
+
+	if(IsCustomMovementMode(CMOVE_Roll))
+	{
+		EnterRoll(PreviousMovementMode, static_cast<ECustomMovementMode>(PreviousCustomMode));
+	}
 }
 
 void UAdventureMovementComponent::Sprint()

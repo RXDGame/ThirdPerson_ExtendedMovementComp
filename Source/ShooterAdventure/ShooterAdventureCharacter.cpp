@@ -55,14 +55,9 @@ AShooterAdventureCharacter::AShooterAdventureCharacter(const FObjectInitializer&
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
 }
 
-void AShooterAdventureCharacter::TryRoll()
+void AShooterAdventureCharacter::OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust)
 {
-	if(AdventureMovementComponent->IsFalling())
-	{
-		return;
-	}
-
-	AdventureMovementComponent->EnterRoll();
+	Super::OnStartCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
 }
 
 void AShooterAdventureCharacter::BeginPlay()
@@ -118,7 +113,7 @@ void AShooterAdventureCharacter::SetupPlayerInputComponent(class UInputComponent
 		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Started, AdventureMovementComponent, &UAdventureMovementComponent::ToggleCrouch);
 		
 		//Roll
-		EnhancedInputComponent->BindAction(RollAction, ETriggerEvent::Started, this, &AShooterAdventureCharacter::TryRoll);
+		EnhancedInputComponent->BindAction(RollAction, ETriggerEvent::Started, AdventureMovementComponent, &UAdventureMovementComponent::TryEnterRoll);
 	}
 
 }

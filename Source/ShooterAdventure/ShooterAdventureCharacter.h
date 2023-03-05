@@ -56,10 +56,9 @@ private:
 
 public:
 	AShooterAdventureCharacter(const FObjectInitializer& ObjectInitializer);
-	
-private:
-	void TryRoll();
-	
+
+	virtual  void OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
+		
 protected:
 
 	/** Called for movement input */

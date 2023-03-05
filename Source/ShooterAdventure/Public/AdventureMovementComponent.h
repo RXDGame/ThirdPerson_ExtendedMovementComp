@@ -41,6 +41,7 @@ class SHOOTERADVENTURE_API UAdventureMovementComponent : public UCharacterMoveme
 
 		// Not flag
 		uint8 Saved_bPreviousWantstoCrouch:1;
+		uint8 Saved_bWantstoRoll:1;
 		
 		virtual bool CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const override;
 		virtual void Clear() override;
@@ -72,6 +73,7 @@ class SHOOTERADVENTURE_API UAdventureMovementComponent : public UCharacterMoveme
 	
 	bool Safe_bWantsToSprint;
 	bool Safe_bPreviousWantsToCrouch;
+	bool Safe_bWantsToRoll;
 	bool bInSlide;
 
 public:
@@ -86,8 +88,9 @@ private:
 	bool GetSlideSurface(FHitResult& Hit) const;
 
 // ROLL
-public:	
-	void EnterRoll();
+public:
+	void TryEnterRoll(){ Safe_bWantsToRoll = true;}
+	void EnterRoll(EMovementMode PreviousMovementMode, ECustomMovementMode PreviousCustomMode);
 	
 private:
 	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollTimeDuration = 1.3f;
@@ -106,6 +109,8 @@ private:
 	bool CanRoll() const;
 	void ResetRoll();
 
+	UFUNCTION(Server, Reliable) void Server_EnterRoll();
+
 public:
 	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
 	virtual bool IsMovingOnGround() const override;
@@ -116,9 +121,11 @@ public:
 
 protected:
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
-	virtual void OnMovementUpdated(float DeltaSeconds, const FVector& OldLocation, const FVector& OldVelocity) override;
-	
+
+	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
+	virtual void OnMovementUpdated(float DeltaSeconds, const FVector& OldLocation, const FVector& OldVelocity) override;	
 	virtual void UpdateCharacterStateAfterMovement(float DeltaSeconds) override;
+	
 	virtual void PhysCustom(float deltaTime, int32 Iterations) override;
 	virtual void OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode) override;
 
