@@ -24,7 +24,7 @@ UCLASS()
 class SHOOTERADVENTURE_API UAdventureMovementComponent : public UCharacterMovementComponent
 {
 	GENERATED_BODY()
-
+#pragma region Custom Saved Move Class
 	class FSavedMove_Adventure : public FSavedMove_Character
 	{		
 	public:
@@ -59,29 +59,39 @@ class SHOOTERADVENTURE_API UAdventureMovementComponent : public UCharacterMoveme
 
 		virtual FSavedMovePtr AllocateNewMove() override;
 	};
+#pragma endregion
+	
+	// Network and Saved Move Methods
+protected:
+	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
+public:
+	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
+	
+private:
+	// Transient
+	UPROPERTY(Transient) AShooterAdventureCharacter* AdventureCharacterOwner;
+	
+	// Safe Variables
+	bool Safe_bWantsToSprint;
+	bool Safe_bPreviousWantsToCrouch;
+	bool Safe_bWantsToRoll;	
 
+public:
+	UAdventureMovementComponent();
+	virtual void InitializeComponent() override;
+	
+// SPRINT
+private:
 	UPROPERTY(EditDefaultsOnly, Category=Sprint) float MaxSprintSpeed;
 
+// SLIDE
+private:
 	UPROPERTY(EditDefaultsOnly, Category=Slide) float MaxSlideSpeed = 300.f;
 	UPROPERTY(EditDefaultsOnly, Category=Slide) float Slide_EnterImpulse = 500.f;
 	UPROPERTY(EditDefaultsOnly, Category=Slide) float Slide_GravityForce = 5000.f;
 	UPROPERTY(EditDefaultsOnly, Category=Slide) float Slide_Friction = 1.3f;	
 	UPROPERTY(EditDefaultsOnly, Category=Slide) float BrakingDecelerationSliding = 500.f;
-
-	// Transient
-	UPROPERTY(Transient) AShooterAdventureCharacter* AdventureCharacterOwner;
 	
-	bool Safe_bWantsToSprint;
-	bool Safe_bPreviousWantsToCrouch;
-	bool Safe_bWantsToRoll;
-	bool bInSlide;
-
-public:
-	UAdventureMovementComponent();
-
-	virtual void InitializeComponent() override;
-	
-private:
 	void EnterSlide();
 	void ExitSlide();
 	void PhysSlide(float deltaTime, int32 Iterations);
@@ -112,7 +122,6 @@ private:
 	UFUNCTION(Server, Reliable) void Server_EnterRoll();
 
 public:
-	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
 	virtual bool IsMovingOnGround() const override;
 	virtual bool CanCrouchInCurrentState() const override;
 	virtual bool CanWalkOffLedges() const override;
@@ -120,8 +129,6 @@ public:
 	virtual float GetMaxBrakingDeceleration() const override;
 
 protected:
-	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
-
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
 	virtual void OnMovementUpdated(float DeltaSeconds, const FVector& OldLocation, const FVector& OldVelocity) override;	
 	virtual void UpdateCharacterStateAfterMovement(float DeltaSeconds) override;

@@ -10,6 +10,7 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "AdventureMovementComponent.h"
+#include "ClimbingComponent.h"
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -55,15 +56,12 @@ AShooterAdventureCharacter::AShooterAdventureCharacter(const FObjectInitializer&
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
 }
 
-void AShooterAdventureCharacter::OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust)
-{
-	Super::OnStartCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
-}
-
 void AShooterAdventureCharacter::BeginPlay()
 {
 	// Call the base class  
 	Super::BeginPlay();
+
+	ClimbingComponent = FindComponentByClass<UClimbingComponent>();
 
 	//Add Input Mapping Context
 	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
@@ -72,6 +70,19 @@ void AShooterAdventureCharacter::BeginPlay()
 		{
 			Subsystem->AddMappingContext(DefaultMappingContext, 0);
 		}
+	}
+}
+
+void AShooterAdventureCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if(ensure(ClimbingComponent) && AdventureMovementComponent->IsFalling())
+	{
+		const FHitResult fwdHit = ClimbingComponent->GetForwardHit();
+		const FHitResult topHit = ClimbingComponent->GetTopHit(fwdHit);
+
+		
 	}
 }
 

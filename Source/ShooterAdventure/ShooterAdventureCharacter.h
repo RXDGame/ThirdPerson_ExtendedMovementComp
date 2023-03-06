@@ -7,6 +7,7 @@
 #include "InputActionValue.h"
 #include "ShooterAdventureCharacter.generated.h"
 
+class UClimbingComponent;
 UCLASS(config=Game)
 class AShooterAdventureCharacter : public ACharacter
 {
@@ -56,8 +57,7 @@ private:
 
 public:
 	AShooterAdventureCharacter(const FObjectInitializer& ObjectInitializer);
-
-	virtual  void OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
+	UClimbingComponent* ClimbingComponent;
 		
 protected:
 
@@ -71,9 +71,11 @@ protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	
 	// To add mapping context
-	virtual void BeginPlay();
+	virtual void BeginPlay() override;
 
 public:
+	virtual void Tick(float DeltaSeconds) override;
+	
 	/** Returns CameraBoom subobject **/
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	/** Returns FollowCamera subobject **/

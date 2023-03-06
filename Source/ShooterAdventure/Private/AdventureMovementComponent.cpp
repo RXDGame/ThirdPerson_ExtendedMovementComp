@@ -8,6 +8,95 @@
 #include "ShooterAdventure/ShooterAdventureCharacter.h"
 
 
+#pragma region Saved Variables - Server-Client
+
+bool UAdventureMovementComponent::FSavedMove_Adventure::CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const
+{
+	FSavedMove_Adventure* NewSaveMove = static_cast<FSavedMove_Adventure*>(NewMove.Get());
+
+	if (Saved_bWantsToSprint != NewSaveMove->Saved_bWantsToSprint)
+	{
+		return false;
+	}
+
+	return FSavedMove_Character::CanCombineWith(NewMove, InCharacter, MaxDelta);
+}
+
+void UAdventureMovementComponent::FSavedMove_Adventure::Clear()
+{
+	FSavedMove_Character::Clear();
+	Saved_bWantsToSprint = 0;
+	Saved_bWantstoRoll = 0;
+	Saved_bPreviousWantstoCrouch = 0;
+}
+
+uint8 UAdventureMovementComponent::FSavedMove_Adventure::GetCompressedFlags() const
+{
+	uint8 Result = FSavedMove_Character::GetCompressedFlags();
+
+	if (Saved_bWantsToSprint) Result |= FLAG_Sprint;
+
+	return Result;
+}
+
+void UAdventureMovementComponent::FSavedMove_Adventure::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel, FNetworkPredictionData_Client_Character& ClientData)
+{
+	FSavedMove_Character::SetMoveFor(C, InDeltaTime, NewAccel, ClientData);
+
+	const UAdventureMovementComponent* CharacterMovement = Cast<UAdventureMovementComponent>(C->GetCharacterMovement());
+	Saved_bWantsToSprint = CharacterMovement->Safe_bWantsToSprint;
+	Saved_bPreviousWantstoCrouch = CharacterMovement->Safe_bPreviousWantsToCrouch;
+	Saved_bWantstoRoll = CharacterMovement->Safe_bWantsToRoll;
+}
+
+void UAdventureMovementComponent::FSavedMove_Adventure::PrepMoveFor(ACharacter* C)
+{
+	FSavedMove_Character::PrepMoveFor(C);
+
+	UAdventureMovementComponent* CharacterMovement = Cast<UAdventureMovementComponent>(C->GetCharacterMovement());
+	CharacterMovement->Safe_bWantsToSprint = Saved_bWantsToSprint;
+	CharacterMovement->Safe_bPreviousWantsToCrouch = Saved_bPreviousWantstoCrouch;
+	CharacterMovement->Safe_bWantsToRoll = Saved_bWantstoRoll;
+}
+
+UAdventureMovementComponent::FNetworkPredictionData_Client_Adventure::FNetworkPredictionData_Client_Adventure(const UCharacterMovementComponent& ClientMovement)
+	: Super(ClientMovement)
+{
+
+}
+
+FSavedMovePtr UAdventureMovementComponent::FNetworkPredictionData_Client_Adventure::AllocateNewMove()
+{
+	return FSavedMovePtr(new FSavedMove_Adventure());
+}
+
+
+void UAdventureMovementComponent::UpdateFromCompressedFlags(uint8 Flags)
+{
+	Super::UpdateFromCompressedFlags(Flags);
+
+	Safe_bWantsToSprint = (Flags & FSavedMove_Character::FLAG_Custom_0) != 0;
+}
+
+FNetworkPredictionData_Client* UAdventureMovementComponent::GetPredictionData_Client() const
+{
+	check(PawnOwner != nullptr);
+
+	if (ClientPredictionData == nullptr)
+	{
+		UAdventureMovementComponent* MutableThis = const_cast<UAdventureMovementComponent*>(this);
+
+		MutableThis->ClientPredictionData = new FNetworkPredictionData_Client_Adventure(*this);
+		MutableThis->ClientPredictionData->MaxSmoothNetUpdateDist = 92.f;
+		MutableThis->ClientPredictionData->NoSmoothNetUpdateDist = 140.f;
+
+	}
+
+	return ClientPredictionData;
+}
+
+#pragma endregion 
+
 UAdventureMovementComponent::UAdventureMovementComponent()
 {
 	NavAgentProps.bCanCrouch = true;
@@ -19,12 +108,15 @@ void UAdventureMovementComponent::InitializeComponent()
 	AdventureCharacterOwner = Cast<AShooterAdventureCharacter>(GetOwner());
 }
 
+#pragma region Slide
+
 void UAdventureMovementComponent::EnterSlide()
 {
 	bWantsToCrouch = true;
-	bInSlide = true;
+	bCrouchMaintainsBaseLocation = true;
 	
 	Velocity += Velocity.GetSafeNormal2D() * Slide_EnterImpulse;
+	SetMovementMode(MOVE_Custom, CMOVE_Slide);
 }
 
 void UAdventureMovementComponent::ExitSlide()
@@ -119,6 +211,9 @@ bool UAdventureMovementComponent::GetSlideSurface(FHitResult& Hit) const
 	return false;//GetWorld()->LineTraceSingleByProfile(Hit, Start, End, ProfileName, AdventureCharacterOwner->GetIgnoreCharacterParam());
 }
 
+#pragma endregion
+
+#pragma region Roll
 void UAdventureMovementComponent::EnterRoll(EMovementMode PreviousMovementMode, ECustomMovementMode PreviousCustomMode)
 {
 	bWantsToCrouch = true;
@@ -372,120 +467,9 @@ void UAdventureMovementComponent::Server_EnterRoll_Implementation()
 	Safe_bWantsToRoll = true;
 }
 
-#pragma region Saved Variables - Server-Client
+#pragma endregion
 
-bool UAdventureMovementComponent::FSavedMove_Adventure::CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const
-{
-	FSavedMove_Adventure* NewSaveMove = static_cast<FSavedMove_Adventure*>(NewMove.Get());
-
-	if (Saved_bWantsToSprint != NewSaveMove->Saved_bWantsToSprint)
-	{
-		return false;
-	}
-
-	return FSavedMove_Character::CanCombineWith(NewMove, InCharacter, MaxDelta);
-}
-
-void UAdventureMovementComponent::FSavedMove_Adventure::Clear()
-{
-	FSavedMove_Character::Clear();
-	Saved_bWantsToSprint = 0;
-}
-
-uint8 UAdventureMovementComponent::FSavedMove_Adventure::GetCompressedFlags() const
-{
-	uint8 Result = FSavedMove_Character::GetCompressedFlags();
-
-	if (Saved_bWantsToSprint) Result |= FLAG_Sprint;
-
-	return Result;
-}
-
-void UAdventureMovementComponent::FSavedMove_Adventure::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel, FNetworkPredictionData_Client_Character& ClientData)
-{
-	FSavedMove_Character::SetMoveFor(C, InDeltaTime, NewAccel, ClientData);
-
-	const UAdventureMovementComponent* CharacterMovement = Cast<UAdventureMovementComponent>(C->GetCharacterMovement());
-	Saved_bWantsToSprint = CharacterMovement->Safe_bWantsToSprint;
-	Saved_bPreviousWantstoCrouch = CharacterMovement->Safe_bPreviousWantsToCrouch;
-	Saved_bWantstoRoll = CharacterMovement->Safe_bWantsToRoll;
-}
-
-void UAdventureMovementComponent::FSavedMove_Adventure::PrepMoveFor(ACharacter* C)
-{
-	FSavedMove_Character::PrepMoveFor(C);
-
-	UAdventureMovementComponent* CharacterMovement = Cast<UAdventureMovementComponent>(C->GetCharacterMovement());
-	CharacterMovement->Safe_bWantsToSprint = Saved_bWantsToSprint;
-	CharacterMovement->Safe_bPreviousWantsToCrouch = Saved_bPreviousWantstoCrouch;
-	CharacterMovement->Safe_bWantsToRoll = Saved_bWantstoRoll;
-}
-
-UAdventureMovementComponent::FNetworkPredictionData_Client_Adventure::FNetworkPredictionData_Client_Adventure(const UCharacterMovementComponent& ClientMovement)
-	: Super(ClientMovement)
-{
-
-}
-
-FSavedMovePtr UAdventureMovementComponent::FNetworkPredictionData_Client_Adventure::AllocateNewMove()
-{
-	return FSavedMovePtr(new FSavedMove_Adventure());
-}
-
-FNetworkPredictionData_Client* UAdventureMovementComponent::GetPredictionData_Client() const
-{
-	check(PawnOwner != nullptr);
-
-	if (ClientPredictionData == nullptr)
-	{
-		UAdventureMovementComponent* MutableThis = const_cast<UAdventureMovementComponent*>(this);
-
-		MutableThis->ClientPredictionData = new FNetworkPredictionData_Client_Adventure(*this);
-		MutableThis->ClientPredictionData->MaxSmoothNetUpdateDist = 92.f;
-		MutableThis->ClientPredictionData->NoSmoothNetUpdateDist = 140.f;
-
-	}
-
-	return ClientPredictionData;
-}
-
-void UAdventureMovementComponent::UpdateFromCompressedFlags(uint8 Flags)
-{
-	Super::UpdateFromCompressedFlags(Flags);
-
-	Safe_bWantsToSprint = (Flags & FSavedMove_Character::FLAG_Custom_0) != 0;
-}
-
-#pragma endregion 
-
-void UAdventureMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
-{
-	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
-
-	if(Safe_bWantsToRoll)
-	{
-		if(CanRoll())
-		{
-			SetMovementMode(MOVE_Custom, CMOVE_Roll);
-			if(!CharacterOwner->HasAuthority()) Server_EnterRoll();
-		}
-		Safe_bWantsToRoll = false;
-	}
-}
-
-void UAdventureMovementComponent::OnMovementUpdated(float DeltaSeconds, const FVector& OldLocation, const FVector& OldVelocity)
-{
-	Super::OnMovementUpdated(DeltaSeconds, OldLocation, OldVelocity);
-
-	FHitResult HitResult;
-	if(GetSlideSurface(HitResult))
-	{
-		EnterSlide();
-	}
-
-	Safe_bPreviousWantsToCrouch = bWantsToCrouch;
-}
-
+#pragma region Movement overwritten Helper Functions
 bool UAdventureMovementComponent::IsMovingOnGround() const
 {
 	return Super::IsMovingOnGround() || IsCustomMovementMode(CMOVE_Slide) || IsCustomMovementMode(CMOVE_Roll);
@@ -549,15 +533,39 @@ float UAdventureMovementComponent::GetMaxBrakingDeceleration() const
 	}
 }
 
+#pragma endregion
+
+void UAdventureMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
+{
+	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
+
+	if(Safe_bWantsToRoll)
+	{
+		if(CanRoll())
+		{
+			SetMovementMode(MOVE_Custom, CMOVE_Roll);
+			if(!CharacterOwner->HasAuthority()) Server_EnterRoll();
+		}
+		Safe_bWantsToRoll = false;
+	}
+	
+	FHitResult HitResult;
+	if(GetSlideSurface(HitResult))
+	{
+		EnterSlide();
+	}
+}
+
+void UAdventureMovementComponent::OnMovementUpdated(float DeltaSeconds, const FVector& OldLocation, const FVector& OldVelocity)
+{
+	Super::OnMovementUpdated(DeltaSeconds, OldLocation, OldVelocity);
+
+	Safe_bPreviousWantsToCrouch = bWantsToCrouch;
+}
+
 void UAdventureMovementComponent::UpdateCharacterStateAfterMovement(float DeltaSeconds)
 {
 	Super::UpdateCharacterStateAfterMovement(DeltaSeconds);
-
-	if(bInSlide)
-	{
-		SetMovementMode(MOVE_Custom, CMOVE_Slide);
-		bInSlide = false;
-	}
 }
 
 void UAdventureMovementComponent::PhysCustom(float deltaTime, int32 Iterations)
