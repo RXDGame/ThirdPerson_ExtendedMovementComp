@@ -225,6 +225,99 @@ void UAdventureMovementComponent::EnterRoll(EMovementMode PreviousMovementMode, 
 	FindFloor(UpdatedComponent->GetComponentLocation(), CurrentFloor, true, nullptr);
 }
 
+void UAdventureMovementComponent::PhysClimbing(float deltaTime, int32 Iterations)
+{
+	if (deltaTime < MIN_TICK_TIME)
+	{
+		return;
+	}	
+
+	FVector OldLocation = UpdatedComponent->GetComponentLocation();
+	if(bIsInterpolating)
+	{
+		FHitResult Hit;
+		if(UpdatedComponent->GetComponentLocation().Equals(TargetInterpolateLocation, 0.001f))
+		{			
+			SafeMoveUpdatedComponent(TargetInterpolateLocation - UpdatedComponent->GetComponentLocation(), TargetInterpolateRotation.Quaternion(), false, Hit);
+			bIsInterpolating = false;
+			return;
+		}
+		
+		FVector Location = FMath::VInterpTo(UpdatedComponent->GetComponentLocation(), TargetInterpolateLocation, deltaTime, InterpSpeed);
+		FRotator Rotation = FMath::RInterpTo(UpdatedComponent->GetComponentRotation(), TargetInterpolateRotation, deltaTime, InterpSpeed);
+
+		SafeMoveUpdatedComponent(Location - UpdatedComponent->GetComponentLocation(), Rotation.Quaternion(), false, Hit);
+		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / deltaTime;
+		return;
+	}
+
+	RestorePreAdditiveRootMotionVelocity();
+	
+	if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
+	{
+		if( bCheatFlying && Acceleration.IsZero() )
+		{
+			Velocity = FVector::ZeroVector;
+		}
+		const float Friction = 0.5f;
+		CalcVelocity(deltaTime, Friction, true, GetMaxBrakingDeceleration());
+	}
+	
+	ApplyRootMotionToVelocity(deltaTime);
+
+	Iterations++;
+	bJustTeleported = false;
+
+	OldLocation = UpdatedComponent->GetComponentLocation();
+	const FVector Adjusted = Velocity * deltaTime;
+	FHitResult Hit(1.f);
+	SafeMoveUpdatedComponent(Adjusted, UpdatedComponent->GetComponentQuat(), true, Hit);
+
+	if (Hit.Time < 1.f)
+	{
+		const FVector GravDir = FVector(0.f, 0.f, -1.f);
+		const FVector VelDir = Velocity.GetSafeNormal();
+		const float UpDown = GravDir | VelDir;
+
+		bool bSteppedUp = false;
+		if ((FMath::Abs(Hit.ImpactNormal.Z) < 0.2f) && (UpDown < 0.5f) && (UpDown > -0.2f) && CanStepUp(Hit))
+		{
+			float stepZ = UpdatedComponent->GetComponentLocation().Z;
+			bSteppedUp = StepUp(GravDir, Adjusted * (1.f - Hit.Time), Hit);
+			if (bSteppedUp)
+			{
+				OldLocation.Z = UpdatedComponent->GetComponentLocation().Z + (OldLocation.Z - stepZ);
+			}
+		}
+
+		if (!bSteppedUp)
+		{
+			//adjust and try again
+			HandleImpact(Hit, deltaTime, Adjusted);
+			SlideAlongSurface(Adjusted, (1.f - Hit.Time), Hit.Normal, Hit, true);
+		}
+	}
+
+	if( !bJustTeleported && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
+	{
+		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / deltaTime;
+	}
+}
+
+void UAdventureMovementComponent::TryClimb(FVector InitialLocation, FRotator InitialRotation)
+{
+	if(!IsFalling() || IsCustomMovementMode(CMOVE_Climbing))
+	{
+		return;
+	}
+
+	bIsInterpolating = true;
+	TargetInterpolateLocation = InitialLocation;
+	TargetInterpolateRotation = InitialRotation;
+
+	SetMovementMode(MOVE_Custom, CMOVE_Climbing);
+}
+
 void UAdventureMovementComponent::ExitRoll()
 {
 	bWantsToCrouch = false;
@@ -508,6 +601,8 @@ float UAdventureMovementComponent::GetMaxSpeed() const
 		return MaxSlideSpeed;
 	case  CMOVE_Roll:
 		return MaxRollSpeed;
+	case CMOVE_Climbing:
+		return 0.f;
 	default:
 		UE_LOG(LogTemp, Fatal, TEXT("Invalid custom movement mode"));
 		return -1.f;
@@ -527,10 +622,22 @@ float UAdventureMovementComponent::GetMaxBrakingDeceleration() const
 		return BrakingDecelerationSliding;
 	case  CMOVE_Roll:
 		return BrakingDecelerationRolling;
+	case CMOVE_Climbing:
+		return BrakingDecelerationFlying;
 	default:
 		UE_LOG(LogTemp, Fatal, TEXT("Invalid custom movement mode"));
 		return -1.f;
 	}
+}
+
+void UAdventureMovementComponent::PhysicsRotation(float DeltaTime)
+{
+	if(IsCustomMovementMode(CMOVE_Climbing))
+	{
+		return;
+	}
+	
+	Super::PhysicsRotation(DeltaTime);
 }
 
 #pragma endregion
@@ -580,6 +687,9 @@ void UAdventureMovementComponent::PhysCustom(float deltaTime, int32 Iterations)
 	case CMOVE_Roll:
 		PhysRoll(deltaTime, Iterations);
 		break;
+	case CMOVE_Climbing:
+		PhysClimbing(deltaTime, Iterations);
+		break;;
 	default:
 		UE_LOG(LogTemp, Fatal, TEXT("Invalid Custom Movement Mode"));
 	}

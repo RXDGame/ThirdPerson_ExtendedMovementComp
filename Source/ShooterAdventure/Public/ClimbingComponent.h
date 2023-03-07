@@ -34,4 +34,7 @@ private:
 public:
 	FHitResult GetForwardHit() const;
 	FHitResult GetTopHit(FHitResult forwardHit) const;
+	bool FoundLedge(FHitResult &FwdHit, FHitResult &TopHit) const;
+	FVector GetCharacterLocationOnLedge(FHitResult FwdHit, FHitResult TopHit) const;
+	FRotator GetCharacterRotationOnLedge(FHitResult FwdHit);
 };

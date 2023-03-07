@@ -76,14 +76,7 @@ void AShooterAdventureCharacter::BeginPlay()
 void AShooterAdventureCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-
-	if(ensure(ClimbingComponent) && AdventureMovementComponent->IsFalling())
-	{
-		const FHitResult fwdHit = ClimbingComponent->GetForwardHit();
-		const FHitResult topHit = ClimbingComponent->GetTopHit(fwdHit);
-
-		
-	}
+	ClimbingUpdate();
 }
 
 FCollisionQueryParams AShooterAdventureCharacter::GetIgnoreCharacterParam() const
@@ -96,6 +89,33 @@ FCollisionQueryParams AShooterAdventureCharacter::GetIgnoreCharacterParam() cons
 	Params.AddIgnoredActors(CharacterChildren);
 
 	return  Params;
+}
+
+void AShooterAdventureCharacter::ClimbingUpdate()
+{
+	if(!ensure(ClimbingComponent))
+	{
+		return;
+	}
+	
+	if(AdventureMovementComponent->IsCustomMovementMode(CMOVE_Climbing))
+	{
+		
+	}
+	else
+	{
+		if(AdventureMovementComponent->IsFalling())
+		{
+			FHitResult FwdHit;
+			FHitResult TopHit;
+			if(ClimbingComponent->FoundLedge(FwdHit, TopHit))
+			{
+				FVector Location = ClimbingComponent->GetCharacterLocationOnLedge(FwdHit, TopHit);
+				FRotator Rotation = ClimbingComponent->GetCharacterRotationOnLedge(FwdHit);
+				AdventureMovementComponent->TryClimb(Location, Rotation);
+			}
+		}
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////

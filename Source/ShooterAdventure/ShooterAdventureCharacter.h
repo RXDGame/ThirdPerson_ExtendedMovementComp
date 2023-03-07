@@ -84,5 +84,8 @@ public:
 	FORCEINLINE class UAdventureMovementComponent* GetAdventureMovementComponent() const { return AdventureMovementComponent; }
 	
 	FCollisionQueryParams GetIgnoreCharacterParam() const;
+	
+private:
+	void ClimbingUpdate();
 };
 

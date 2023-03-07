@@ -14,6 +14,7 @@ enum ECustomMovementMode
 	CMOVE_None		UMETA(Hidden),
 	CMOVE_Slide		UMETA(DisplayName = "Slide"),
 	CMOVE_Roll		UMETA(DisplayName = "Roll"),
+	CMOVE_Climbing	UMETA(DisplayName = "Climbing"),
 	CMOVE_Max		UMETA(Hidden),
 };
 
@@ -101,7 +102,19 @@ private:
 public:
 	void TryEnterRoll(){ Safe_bWantsToRoll = true;}
 	void EnterRoll(EMovementMode PreviousMovementMode, ECustomMovementMode PreviousCustomMode);
+
+// CLIMBING
+private:
+	UPROPERTY(EditDefaultsOnly, Category=Climbing) float InterpSpeed = 100.f;
 	
+	bool bIsInterpolating;
+	FVector TargetInterpolateLocation;
+	FRotator TargetInterpolateRotation;
+	void PhysClimbing(float deltaTime, int32 Iterations);
+	
+public:	
+	void TryClimb(FVector InitialLocation, FRotator InitialRotation);
+
 private:
 	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollTimeDuration = 1.3f;
 	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollDelayBetweenRolls = 0.25f;
@@ -127,6 +140,7 @@ public:
 	virtual bool CanWalkOffLedges() const override;
 	virtual float GetMaxSpeed() const override;
 	virtual float GetMaxBrakingDeceleration() const override;
+	virtual void PhysicsRotation(float DeltaTime) override;
 
 protected:
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;

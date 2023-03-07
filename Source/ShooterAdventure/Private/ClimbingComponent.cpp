@@ -66,3 +66,35 @@ FHitResult UClimbingComponent::GetTopHit(FHitResult forwardHit) const
 	return TopHit;
 }
 
+bool UClimbingComponent::FoundLedge(FHitResult& FwdHit, FHitResult& TopHit) const
+{	
+	FwdHit = GetForwardHit();
+	if(!FwdHit.IsValidBlockingHit())
+	{
+		return false;
+	}
+	
+	TopHit = GetTopHit(FwdHit);
+	if(!TopHit.IsValidBlockingHit())
+	{
+		return false;
+	}
+
+	return true;
+}
+
+FVector UClimbingComponent::GetCharacterLocationOnLedge(FHitResult FwdHit, FHitResult TopHit) const
+{
+	FVector TargetLocation = FwdHit.ImpactPoint;
+	TargetLocation.Z = TopHit.ImpactPoint.Z;
+	TargetLocation += FwdHit.ImpactNormal.GetSafeNormal2D() * OffsetFromLedge.X + FVector::DownVector * OffsetFromLedge.Z;
+	
+	return TargetLocation;
+}
+
+FRotator UClimbingComponent::GetCharacterRotationOnLedge(FHitResult FwdHit)
+{
+	const FRotator TargetRotation = FRotationMatrix::MakeFromZX(FVector::UpVector, -FwdHit.Normal.GetSafeNormal2D()).Rotator();
+	return TargetRotation;
+}
+
