@@ -30,7 +30,7 @@ FHitResult UClimbingComponent::GetForwardHit() const
 
 	const FVector StartTrace = GetOwner()->GetActorLocation() + TraceOrigin;
 	const FVector EndTrace = StartTrace + GetOwner()->GetActorForwardVector() * MaxTraceDistance;
-	UKismetSystemLibrary::CapsuleTraceSingle(GetWorld(), StartTrace, EndTrace, CapsuleTraceRadius, MaxTraceHeight, TraceChannel, true,
+	UKismetSystemLibrary::CapsuleTraceSingle(GetWorld(), StartTrace, EndTrace, CapsuleTraceRadius, MaxTraceHeight, TraceChannel, false,
 		TArray<AActor*>(), EDrawDebugTrace::ForOneFrame, Hit, true);
 
 	return Hit;
@@ -87,7 +87,7 @@ FVector UClimbingComponent::GetCharacterLocationOnLedge(FHitResult FwdHit, FHitR
 {
 	FVector TargetLocation = FwdHit.ImpactPoint;
 	TargetLocation.Z = TopHit.ImpactPoint.Z;
-	TargetLocation += FwdHit.ImpactNormal.GetSafeNormal2D() * OffsetFromLedge.X + FVector::DownVector * OffsetFromLedge.Z;
+	TargetLocation += FwdHit.Normal.GetSafeNormal2D() * OffsetFromLedge.X + FVector::DownVector * OffsetFromLedge.Z;
 	
 	return TargetLocation;
 }

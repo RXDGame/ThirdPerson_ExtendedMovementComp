@@ -3,9 +3,11 @@
 
 #include "AdventureMovementComponent.h"
 
+#include "ClimbingComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/Character.h"
 #include "ShooterAdventure/ShooterAdventureCharacter.h"
+#include "Engine/Engine.h"
 
 
 #pragma region Saved Variables - Server-Client
@@ -106,6 +108,7 @@ void UAdventureMovementComponent::InitializeComponent()
 {
 	Super::InitializeComponent();
 	AdventureCharacterOwner = Cast<AShooterAdventureCharacter>(GetOwner());
+	ClimbingComponent = AdventureCharacterOwner->FindComponentByClass<UClimbingComponent>();
 }
 
 #pragma region Slide
@@ -223,99 +226,6 @@ void UAdventureMovementComponent::EnterRoll(EMovementMode PreviousMovementMode, 
 	RollTime = RollTimeDuration;
 
 	FindFloor(UpdatedComponent->GetComponentLocation(), CurrentFloor, true, nullptr);
-}
-
-void UAdventureMovementComponent::PhysClimbing(float deltaTime, int32 Iterations)
-{
-	if (deltaTime < MIN_TICK_TIME)
-	{
-		return;
-	}	
-
-	FVector OldLocation = UpdatedComponent->GetComponentLocation();
-	if(bIsInterpolating)
-	{
-		FHitResult Hit;
-		if(UpdatedComponent->GetComponentLocation().Equals(TargetInterpolateLocation, 0.001f))
-		{			
-			SafeMoveUpdatedComponent(TargetInterpolateLocation - UpdatedComponent->GetComponentLocation(), TargetInterpolateRotation.Quaternion(), false, Hit);
-			bIsInterpolating = false;
-			return;
-		}
-		
-		FVector Location = FMath::VInterpTo(UpdatedComponent->GetComponentLocation(), TargetInterpolateLocation, deltaTime, InterpSpeed);
-		FRotator Rotation = FMath::RInterpTo(UpdatedComponent->GetComponentRotation(), TargetInterpolateRotation, deltaTime, InterpSpeed);
-
-		SafeMoveUpdatedComponent(Location - UpdatedComponent->GetComponentLocation(), Rotation.Quaternion(), false, Hit);
-		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / deltaTime;
-		return;
-	}
-
-	RestorePreAdditiveRootMotionVelocity();
-	
-	if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
-	{
-		if( bCheatFlying && Acceleration.IsZero() )
-		{
-			Velocity = FVector::ZeroVector;
-		}
-		const float Friction = 0.5f;
-		CalcVelocity(deltaTime, Friction, true, GetMaxBrakingDeceleration());
-	}
-	
-	ApplyRootMotionToVelocity(deltaTime);
-
-	Iterations++;
-	bJustTeleported = false;
-
-	OldLocation = UpdatedComponent->GetComponentLocation();
-	const FVector Adjusted = Velocity * deltaTime;
-	FHitResult Hit(1.f);
-	SafeMoveUpdatedComponent(Adjusted, UpdatedComponent->GetComponentQuat(), true, Hit);
-
-	if (Hit.Time < 1.f)
-	{
-		const FVector GravDir = FVector(0.f, 0.f, -1.f);
-		const FVector VelDir = Velocity.GetSafeNormal();
-		const float UpDown = GravDir | VelDir;
-
-		bool bSteppedUp = false;
-		if ((FMath::Abs(Hit.ImpactNormal.Z) < 0.2f) && (UpDown < 0.5f) && (UpDown > -0.2f) && CanStepUp(Hit))
-		{
-			float stepZ = UpdatedComponent->GetComponentLocation().Z;
-			bSteppedUp = StepUp(GravDir, Adjusted * (1.f - Hit.Time), Hit);
-			if (bSteppedUp)
-			{
-				OldLocation.Z = UpdatedComponent->GetComponentLocation().Z + (OldLocation.Z - stepZ);
-			}
-		}
-
-		if (!bSteppedUp)
-		{
-			//adjust and try again
-			HandleImpact(Hit, deltaTime, Adjusted);
-			SlideAlongSurface(Adjusted, (1.f - Hit.Time), Hit.Normal, Hit, true);
-		}
-	}
-
-	if( !bJustTeleported && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
-	{
-		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / deltaTime;
-	}
-}
-
-void UAdventureMovementComponent::TryClimb(FVector InitialLocation, FRotator InitialRotation)
-{
-	if(!IsFalling() || IsCustomMovementMode(CMOVE_Climbing))
-	{
-		return;
-	}
-
-	bIsInterpolating = true;
-	TargetInterpolateLocation = InitialLocation;
-	TargetInterpolateRotation = InitialRotation;
-
-	SetMovementMode(MOVE_Custom, CMOVE_Climbing);
 }
 
 void UAdventureMovementComponent::ExitRoll()
@@ -558,6 +468,128 @@ void UAdventureMovementComponent::ResetRoll()
 void UAdventureMovementComponent::Server_EnterRoll_Implementation()
 {
 	Safe_bWantsToRoll = true;
+}
+
+#pragma endregion
+
+#pragma region Climbing
+
+void UAdventureMovementComponent::PhysClimbing(float deltaTime, int32 Iterations)
+{
+	if (deltaTime < MIN_TICK_TIME)
+	{
+		return;
+	}	
+
+	FVector OldLocation = UpdatedComponent->GetComponentLocation();
+	if(bIsInterpolating)
+	{
+		FHitResult Hit;
+		if(UpdatedComponent->GetComponentLocation().Equals(TargetInterpolateLocation, 0.001f))
+		{			
+			SafeMoveUpdatedComponent(TargetInterpolateLocation - UpdatedComponent->GetComponentLocation(), TargetInterpolateRotation.Quaternion(), false, Hit);
+			bIsInterpolating = false;
+			return;
+		}
+		
+		FVector Location = FMath::VInterpTo(UpdatedComponent->GetComponentLocation(), TargetInterpolateLocation, deltaTime, InterpSpeed);
+		FRotator Rotation = FMath::RInterpTo(UpdatedComponent->GetComponentRotation(), TargetInterpolateRotation, deltaTime, InterpSpeed);
+
+		SafeMoveUpdatedComponent(Location - UpdatedComponent->GetComponentLocation(), Rotation.Quaternion(), false, Hit);
+		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / deltaTime;
+		HorizontalDirection = 0;
+		return;
+	}
+
+	RestorePreAdditiveRootMotionVelocity();
+	
+	if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
+	{
+		if( bCheatFlying && Acceleration.IsZero() )
+		{
+			Velocity = FVector::ZeroVector;
+		}
+		const float Friction = 0.5f;
+		CalcVelocity(deltaTime, Friction, true, GetMaxBrakingDeceleration());
+	}
+	
+	ApplyRootMotionToVelocity(deltaTime);
+
+	Iterations++;
+	bJustTeleported = false;
+
+	OldLocation = UpdatedComponent->GetComponentLocation();
+	const FVector Adjusted = Velocity * deltaTime;
+	FHitResult Hit(1.f);
+	SafeMoveUpdatedComponent(Adjusted, UpdatedComponent->GetComponentQuat(), true, Hit);
+
+	if (Hit.Time < 1.f)
+	{
+		const FVector GravDir = FVector(0.f, 0.f, -1.f);
+		const FVector VelDir = Velocity.GetSafeNormal();
+		const float UpDown = GravDir | VelDir;
+
+		bool bSteppedUp = false;
+		if ((FMath::Abs(Hit.ImpactNormal.Z) < 0.2f) && (UpDown < 0.5f) && (UpDown > -0.2f) && CanStepUp(Hit))
+		{
+			float stepZ = UpdatedComponent->GetComponentLocation().Z;
+			bSteppedUp = StepUp(GravDir, Adjusted * (1.f - Hit.Time), Hit);
+			if (bSteppedUp)
+			{
+				OldLocation.Z = UpdatedComponent->GetComponentLocation().Z + (OldLocation.Z - stepZ);
+			}
+		}
+
+		if (!bSteppedUp)
+		{
+			//adjust and try again
+			HandleImpact(Hit, deltaTime, Adjusted);
+			SlideAlongSurface(Adjusted, (1.f - Hit.Time), Hit.Normal, Hit, true);
+		}
+	}
+
+	if( !bJustTeleported && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
+	{
+		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / deltaTime;
+	}
+
+	if(Acceleration.SizeSquared2D() <= 0.1f)
+	{
+		HorizontalDirection = 0;
+	}
+	else
+	{
+		HorizontalDirection = FVector::DotProduct(Acceleration.GetSafeNormal2D(), CharacterOwner->GetActorRightVector());
+	}
+	
+	// FString Message = FString::Printf(TEXT("Horizontal Direction: %s"), *FString::SanitizeFloat(HorizontalDirection));
+	// GEngine->AddOnScreenDebugMessage(1, 0, FColor::Blue, Message);
+	
+	// update to fit ledge
+	FHitResult FwdHit, TopHit;
+	if(ClimbingComponent->FoundLedge(FwdHit, TopHit))
+	{
+		FVector Location = ClimbingComponent->GetCharacterLocationOnLedge(FwdHit, TopHit);
+		FRotator Rotation = ClimbingComponent->GetCharacterRotationOnLedge(FwdHit);
+			
+		FVector Delta = Location - UpdatedComponent->GetComponentLocation();
+		FHitResult MoveHit;
+		SafeMoveUpdatedComponent(Delta, Rotation.Quaternion(), false, MoveHit);
+	}
+}
+
+void UAdventureMovementComponent::TryClimb(FVector InitialLocation, FRotator InitialRotation)
+{
+	if(!IsFalling() || IsCustomMovementMode(CMOVE_Climbing))
+	{
+		return;
+	}
+
+	bIsInterpolating = true;
+	TargetInterpolateLocation = InitialLocation;
+	TargetInterpolateRotation = InitialRotation;
+
+	SetMovementMode(MOVE_Custom, CMOVE_Climbing);
 }
 
 #pragma endregion

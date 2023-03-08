@@ -6,6 +6,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "AdventureMovementComponent.generated.h"
 
+class UClimbingComponent;
 class AShooterAdventureCharacter;
 
 UENUM(BlueprintType)
@@ -110,9 +111,12 @@ private:
 	bool bIsInterpolating;
 	FVector TargetInterpolateLocation;
 	FRotator TargetInterpolateRotation;
+	TObjectPtr<UClimbingComponent> ClimbingComponent;
+	
 	void PhysClimbing(float deltaTime, int32 Iterations);
 	
-public:	
+public:
+	UPROPERTY(BlueprintReadOnly, Category=Climbing) float HorizontalDirection;
 	void TryClimb(FVector InitialLocation, FRotator InitialRotation);
 
 private:
