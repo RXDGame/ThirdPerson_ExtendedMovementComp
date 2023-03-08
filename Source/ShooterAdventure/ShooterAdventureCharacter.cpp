@@ -110,12 +110,27 @@ void AShooterAdventureCharacter::ClimbingUpdate()
 			FHitResult TopHit;
 			if(ClimbingComponent->FoundLedge(FwdHit, TopHit))
 			{
+				if(CurrentLedge == TopHit.GetActor())
+				{
+					return;
+				}
+				
 				FVector Location = ClimbingComponent->GetCharacterLocationOnLedge(FwdHit, TopHit);
 				FRotator Rotation = ClimbingComponent->GetCharacterRotationOnLedge(FwdHit);
 				AdventureMovementComponent->TryClimb(Location, Rotation);
+				CurrentLedge = TopHit.GetActor();
 			}
 		}
+		else
+		{
+			ResetLedge();
+		}
 	}
+}
+
+void AShooterAdventureCharacter::ResetLedge()
+{
+	CurrentLedge = nullptr;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -145,8 +160,11 @@ void AShooterAdventureCharacter::SetupPlayerInputComponent(class UInputComponent
 		
 		//Roll
 		EnhancedInputComponent->BindAction(RollAction, ETriggerEvent::Started, AdventureMovementComponent, &UAdventureMovementComponent::TryEnterRoll);
-	}
 
+		// Climbing
+		EnhancedInputComponent->BindAction(ClimbUpAction, ETriggerEvent::Started, AdventureMovementComponent, &UAdventureMovementComponent::DoClimbJump);
+		EnhancedInputComponent->BindAction(DropClimbAction, ETriggerEvent::Started, AdventureMovementComponent, &UAdventureMovementComponent::DropClimb);
+	}
 }
 
 void AShooterAdventureCharacter::Move(const FInputActionValue& Value)

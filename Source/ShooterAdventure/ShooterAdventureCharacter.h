@@ -53,11 +53,19 @@ private:
 	
 	/** Roll Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
-	class UInputAction* RollAction;	
+	class UInputAction* RollAction;
+	
+	/** Climb Up Input Action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	class UInputAction* ClimbUpAction;
+	
+	/** Drop Climb Input Action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	class UInputAction* DropClimbAction;	
 
 public:
 	AShooterAdventureCharacter(const FObjectInitializer& ObjectInitializer);
-	UClimbingComponent* ClimbingComponent;
+	TObjectPtr<UClimbingComponent> ClimbingComponent;
 		
 protected:
 
@@ -87,5 +95,7 @@ public:
 	
 private:
 	void ClimbingUpdate();
+	UFUNCTION() void ResetLedge();
+	AActor* CurrentLedge;
 };
 

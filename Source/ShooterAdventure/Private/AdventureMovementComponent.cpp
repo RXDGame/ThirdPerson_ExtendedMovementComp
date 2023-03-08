@@ -552,18 +552,11 @@ void UAdventureMovementComponent::PhysClimbing(float deltaTime, int32 Iterations
 	{
 		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / deltaTime;
 	}
-
-	if(Acceleration.SizeSquared2D() <= 0.1f)
-	{
-		HorizontalDirection = 0;
-	}
-	else
-	{
-		HorizontalDirection = FVector::DotProduct(Acceleration.GetSafeNormal2D(), CharacterOwner->GetActorRightVector());
-	}
 	
-	// FString Message = FString::Printf(TEXT("Horizontal Direction: %s"), *FString::SanitizeFloat(HorizontalDirection));
-	// GEngine->AddOnScreenDebugMessage(1, 0, FColor::Blue, Message);
+	if(bLeavingClimbing)
+	{
+		return;
+	}
 	
 	// update to fit ledge
 	FHitResult FwdHit, TopHit;
@@ -575,7 +568,32 @@ void UAdventureMovementComponent::PhysClimbing(float deltaTime, int32 Iterations
 		FVector Delta = Location - UpdatedComponent->GetComponentLocation();
 		FHitResult MoveHit;
 		SafeMoveUpdatedComponent(Delta, Rotation.Quaternion(), false, MoveHit);
+		
+		if(Acceleration.SizeSquared() <= 10.f)
+		{
+			HorizontalDirection = 0;
+		}
+		else
+		{
+			float targetDirection = FVector::DotProduct(Acceleration.GetSafeNormal2D(), CharacterOwner->GetActorRightVector());
+			FVector TargetLocationOnEdge;
+			if(ClimbingComponent->CanMoveInDirection(targetDirection, TopHit.GetActor(), TargetLocationOnEdge))
+			{
+				HorizontalDirection = targetDirection;
+				bCanShimmy = true;
+			}
+			else
+			{				
+				HorizontalDirection = 0;
+				CurrentRootMotion.Clear();
+				Velocity = FVector::ZeroVector;
+				bCanShimmy = false;
+			}
+		}
 	}
+		
+	/*FString Message = FString::Printf(TEXT("Horizontal Direction: %s"), *FString::SanitizeFloat(HorizontalDirection));
+	GEngine->AddOnScreenDebugMessage(1, 0, FColor::Blue, Message);*/
 }
 
 void UAdventureMovementComponent::TryClimb(FVector InitialLocation, FRotator InitialRotation)
@@ -585,11 +603,60 @@ void UAdventureMovementComponent::TryClimb(FVector InitialLocation, FRotator Ini
 		return;
 	}
 
-	bIsInterpolating = true;
-	TargetInterpolateLocation = InitialLocation;
-	TargetInterpolateRotation = InitialRotation;
+	InterpolateToTarget(InitialLocation, InitialRotation);
 
 	SetMovementMode(MOVE_Custom, CMOVE_Climbing);
+	CharacterOwner->StopAnimMontage(DropClimbMontage);
+}
+
+void UAdventureMovementComponent::DoClimbJump()
+{
+	if(!IsCustomMovementMode(CMOVE_Climbing) || bLeavingClimbing)
+	{
+		return;
+	}
+
+	if(FMath::Abs(HorizontalDirection) < 0.1f && ClimbingComponent->CanClimbUp(TargetClimbUpLocation))
+	{
+		// climb up
+		bLeavingClimbing = true;
+		bCanShimmy = true;
+		
+		OnClimbUp.Broadcast();
+		
+		CharacterOwner->PlayAnimMontage(ClimbUpMontage);
+		CharacterOwner->GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+}
+
+void UAdventureMovementComponent::DropClimb()
+{
+	if(!IsCustomMovementMode(CMOVE_Climbing) || bLeavingClimbing)
+	{
+		return;
+	}
+
+	bLeavingClimbing = true;
+	bCanShimmy = true;
+	CharacterOwner->PlayAnimMontage(DropClimbMontage);
+}
+
+void UAdventureMovementComponent::InterpolateToTarget(FVector Location, FRotator Rotation)
+{
+	bIsInterpolating = true;
+	TargetInterpolateLocation = Location;
+	TargetInterpolateRotation = Rotation;
+}
+
+void UAdventureMovementComponent::ExitClimbing()
+{
+	FindFloor(UpdatedComponent->GetComponentLocation(), CurrentFloor, true, nullptr);
+		
+	SetMovementMode(CurrentFloor.IsWalkableFloor() ?  MOVE_Walking : MOVE_Falling);
+	bLeavingClimbing = false;
+	HorizontalDirection = 0;
+
+	CharacterOwner->GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 }
 
 #pragma endregion

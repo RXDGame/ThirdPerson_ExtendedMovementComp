@@ -19,6 +19,8 @@ enum ECustomMovementMode
 	CMOVE_Max		UMETA(Hidden),
 };
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FStartClimbUpDelegate);
+
 /**
  * 
  */
@@ -104,21 +106,6 @@ public:
 	void TryEnterRoll(){ Safe_bWantsToRoll = true;}
 	void EnterRoll(EMovementMode PreviousMovementMode, ECustomMovementMode PreviousCustomMode);
 
-// CLIMBING
-private:
-	UPROPERTY(EditDefaultsOnly, Category=Climbing) float InterpSpeed = 100.f;
-	
-	bool bIsInterpolating;
-	FVector TargetInterpolateLocation;
-	FRotator TargetInterpolateRotation;
-	TObjectPtr<UClimbingComponent> ClimbingComponent;
-	
-	void PhysClimbing(float deltaTime, int32 Iterations);
-	
-public:
-	UPROPERTY(BlueprintReadOnly, Category=Climbing) float HorizontalDirection;
-	void TryClimb(FVector InitialLocation, FRotator InitialRotation);
-
 private:
 	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollTimeDuration = 1.3f;
 	UPROPERTY(EditDefaultsOnly, Category=Roll) float RollDelayBetweenRolls = 0.25f;
@@ -138,6 +125,43 @@ private:
 
 	UFUNCTION(Server, Reliable) void Server_EnterRoll();
 
+	// CLIMBING
+private:
+	UPROPERTY(EditDefaultsOnly, Category=Climbing) float InterpSpeed = 100.f;
+	bool bIsInterpolating;
+	bool bLeavingClimbing;
+	FVector TargetInterpolateLocation;
+	FRotator TargetInterpolateRotation;
+	TObjectPtr<UClimbingComponent> ClimbingComponent;
+	
+	void PhysClimbing(float deltaTime, int32 Iterations);
+	
+public:	
+	UPROPERTY(BlueprintReadOnly, Category=Climbing)
+	float HorizontalDirection;
+	
+	UPROPERTY(BlueprintReadOnly, Category=Climbing)
+	FVector TargetClimbUpLocation;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* ClimbUpMontage;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* DropClimbMontage;
+	
+	UPROPERTY(BlueprintAssignable)
+	FStartClimbUpDelegate OnClimbUp;
+	
+	UPROPERTY(BlueprintReadOnly, Category=Climbing)
+	bool bCanShimmy;
+	
+	void TryClimb(FVector InitialLocation, FRotator InitialRotation);
+	void DoClimbJump();
+	void DropClimb();
+	void InterpolateToTarget(FVector Location, FRotator Rotation);
+
+	UFUNCTION(BlueprintCallable)
+	void ExitClimbing();
 public:
 	virtual bool IsMovingOnGround() const override;
 	virtual bool CanCrouchInCurrentState() const override;

@@ -7,6 +7,7 @@
 #include "ClimbingComponent.generated.h"
 
 
+class UCapsuleComponent;
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class SHOOTERADVENTURE_API UClimbingComponent : public UActorComponent
 {
@@ -21,20 +22,33 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
+	FVector GetTraceOrigin() const;
+	
 	UPROPERTY(EditDefaultsOnly) TEnumAsByte<ETraceTypeQuery> TraceChannel;
 	UPROPERTY(EditDefaultsOnly) FVector TraceOrigin;	
 	UPROPERTY(EditDefaultsOnly) float CapsuleTraceRadius;
+	UPROPERTY(EditDefaultsOnly) float CapsuleTraceHeight;
 	UPROPERTY(EditDefaultsOnly) float MaxTraceDistance;
 	UPROPERTY(EditDefaultsOnly) float MaxTraceHeight;
 	UPROPERTY(EditDefaultsOnly) int TopTraceIterations;
 	UPROPERTY(EditDefaultsOnly) float MaxTopTraceDepth;
 	UPROPERTY(EditDefaultsOnly) float MinAllowedDepthToClimbUp;
 	UPROPERTY(EditDefaultsOnly, Category=Character) FVector OffsetFromLedge;
+	UPROPERTY(EditDefaultsOnly, Category=Character) FVector ClimbUpOffset;
+	UPROPERTY(EditDefaultsOnly, Category=SideCasting) int SideIterations;
+	UPROPERTY(EditDefaultsOnly, Category=SideCasting) float MinSideDistance;
+
+	TObjectPtr<UCapsuleComponent> CapsuleComponent;
 	
 public:
+	UPROPERTY(EditAnywhere, Category=Debugging) bool DebugTrace;
+	
 	FHitResult GetForwardHit() const;
 	FHitResult GetTopHit(FHitResult forwardHit) const;
 	bool FoundLedge(FHitResult &FwdHit, FHitResult &TopHit) const;
 	FVector GetCharacterLocationOnLedge(FHitResult FwdHit, FHitResult TopHit) const;
 	FRotator GetCharacterRotationOnLedge(FHitResult FwdHit);
+
+	bool CanClimbUp(FVector& TargetClimbLocation) const;
+	bool CanMoveInDirection(float HorizontalDirection, AActor* CurrentLedgeActor, FVector& TargetEdgeLocation) const;
 };
