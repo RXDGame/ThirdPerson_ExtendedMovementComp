@@ -83,6 +83,7 @@ private:
 public:
 	UAdventureMovementComponent();
 	virtual void InitializeComponent() override;
+	virtual bool DoJump(bool bReplayingMoves) override;
 	
 // SPRINT
 private:

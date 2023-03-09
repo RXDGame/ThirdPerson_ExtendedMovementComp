@@ -111,6 +111,23 @@ void UAdventureMovementComponent::InitializeComponent()
 	ClimbingComponent = AdventureCharacterOwner->FindComponentByClass<UClimbingComponent>();
 }
 
+bool UAdventureMovementComponent::DoJump(bool bReplayingMoves)
+{
+	if(ClimbingComponent != nullptr)
+	{
+		FVector LaunchVelocity;
+		if(ClimbingComponent->GetValidLaunchVelocity(ClimbingComponent->GetReachableGrabPoints(), LaunchVelocity, GetGravityZ()))
+		{
+			CharacterOwner->LaunchCharacter(LaunchVelocity, true, true);
+			const FQuat Rotation = FRotationMatrix::MakeFromXZ(LaunchVelocity.GetSafeNormal2D(), FVector::UpVector).ToQuat();
+			FHitResult Hit;
+			SafeMoveUpdatedComponent(FVector::ZeroVector, Rotation, false, Hit);
+		}
+	}
+	
+	return Super::DoJump(bReplayingMoves);
+}
+
 #pragma region Slide
 
 void UAdventureMovementComponent::EnterSlide()

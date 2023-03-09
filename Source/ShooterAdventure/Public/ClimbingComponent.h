@@ -37,8 +37,12 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category=Character) FVector ClimbUpOffset;
 	UPROPERTY(EditDefaultsOnly, Category=SideCasting) int SideIterations;
 	UPROPERTY(EditDefaultsOnly, Category=SideCasting) float MinSideDistance;
+	UPROPERTY(EditDefaultsOnly) float MaxRangeToFindLedge;
+	UPROPERTY(EditDefaultsOnly) float MaxJumpSpeed;
 
 	TObjectPtr<UCapsuleComponent> CapsuleComponent;
+
+	bool IsPossibleToReach(const USceneComponent* Candidate, FVector& TossVelocity, float Gravity) const;
 	
 public:
 	UPROPERTY(EditAnywhere, Category=Debugging) bool DebugTrace;
@@ -49,6 +53,8 @@ public:
 	FVector GetCharacterLocationOnLedge(FHitResult FwdHit, FHitResult TopHit) const;
 	FRotator GetCharacterRotationOnLedge(FHitResult FwdHit);
 
+	TArray<USceneComponent*> GetReachableGrabPoints() const;
+	bool GetValidLaunchVelocity(TArray<USceneComponent*> GrabPoints,FVector& LaunchVelocity, float Gravity) const;
 	bool CanClimbUp(FVector& TargetClimbLocation) const;
 	bool CanMoveInDirection(float HorizontalDirection, AActor* CurrentLedgeActor, FVector& TargetEdgeLocation) const;
 };

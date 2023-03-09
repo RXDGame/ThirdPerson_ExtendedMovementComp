@@ -2,7 +2,10 @@
 
 
 #include "ClimbingComponent.h"
+
+#include "Ledge.h"
 #include "Components/CapsuleComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 // Sets default values for this component's properties
@@ -26,6 +29,21 @@ void UClimbingComponent::BeginPlay()
 FVector UClimbingComponent::GetTraceOrigin() const
 {
 	return GetOwner()->GetActorLocation() + TraceOrigin;
+}
+
+bool UClimbingComponent::IsPossibleToReach(const USceneComponent* Candidate, FVector& TossVelocity, float Gravity) const
+{
+	FHitResult HitResult;
+	HitResult.ImpactPoint = Candidate->GetComponentLocation();
+	HitResult.Normal = Candidate->GetForwardVector();
+	if(UGameplayStatics::SuggestProjectileVelocity(GetWorld(), TossVelocity, GetOwner()->GetActorLocation(),
+		GetCharacterLocationOnLedge(HitResult, HitResult),	MaxJumpSpeed, true, 0, Gravity, ESuggestProjVelocityTraceOption::DoNotTrace,
+		FCollisionResponseParams::DefaultResponseParam, TArray<AActor*>(), true))
+	{
+		return true;
+	}
+
+	return false;
 }
 
 FHitResult UClimbingComponent::GetForwardHit() const
@@ -100,6 +118,49 @@ FRotator UClimbingComponent::GetCharacterRotationOnLedge(FHitResult FwdHit)
 {
 	const FRotator TargetRotation = FRotationMatrix::MakeFromZX(FVector::UpVector, -FwdHit.Normal.GetSafeNormal2D()).Rotator();
 	return TargetRotation;
+}
+
+TArray<USceneComponent*> UClimbingComponent::GetReachableGrabPoints() const
+{
+	TArray<USceneComponent*> ClosestPoints;
+	TArray<FOverlapResult> Overlapped;
+	const FCollisionShape SphereShape = FCollisionShape::MakeSphere(MaxRangeToFindLedge);
+	if(GetWorld()->OverlapMultiByChannel(Overlapped, GetTraceOrigin(), FQuat::Identity, static_cast<ECollisionChannel>(TraceChannel.GetValue()), SphereShape))
+	{
+		for (FOverlapResult OverlapResult : Overlapped)
+		{
+			const ALedge* Ledge = Cast<ALedge>(OverlapResult.GetActor());
+			if(Ledge != nullptr)
+			{
+				USceneComponent* Candidate = Ledge->GetClosestPoint(GetOwner()->GetActorLocation());
+				ClosestPoints.Add(Candidate);
+			}
+		}
+	}
+	
+	return ClosestPoints;
+}
+
+bool UClimbingComponent::GetValidLaunchVelocity(TArray<USceneComponent*> GrabPoints, FVector& LaunchVelocity, float Gravity) const
+{
+	const FVector CharacterLocation = GetOwner()->GetActorLocation();
+	float ClosestDistance = 1000000000000.f;
+	const USceneComponent* Destination = nullptr;
+	for (USceneComponent* Point : GrabPoints)
+	{
+		const float distance = FVector::Distance(CharacterLocation, Point->GetComponentLocation());
+		if(distance < ClosestDistance)
+		{
+			FVector TossVelocity;
+			if(IsPossibleToReach(Point, TossVelocity, Gravity))
+			{
+				LaunchVelocity = TossVelocity;
+				Destination = Point;
+				ClosestDistance = distance;
+			}
+		}
+	}
+	return Destination != nullptr;
 }
 
 bool UClimbingComponent::CanClimbUp(FVector& TargetClimbLocation) const
