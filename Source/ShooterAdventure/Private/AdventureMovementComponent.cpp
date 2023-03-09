@@ -115,14 +115,7 @@ bool UAdventureMovementComponent::DoJump(bool bReplayingMoves)
 {
 	if(ClimbingComponent != nullptr)
 	{
-		FVector LaunchVelocity;
-		if(ClimbingComponent->GetValidLaunchVelocity(ClimbingComponent->GetReachableGrabPoints(), LaunchVelocity, GetGravityZ()))
-		{
-			CharacterOwner->LaunchCharacter(LaunchVelocity, true, true);
-			const FQuat Rotation = FRotationMatrix::MakeFromXZ(LaunchVelocity.GetSafeNormal2D(), FVector::UpVector).ToQuat();
-			FHitResult Hit;
-			SafeMoveUpdatedComponent(FVector::ZeroVector, Rotation, false, Hit);
-		}
+		LaunchToLedge();
 	}
 	
 	return Super::DoJump(bReplayingMoves);
@@ -570,7 +563,7 @@ void UAdventureMovementComponent::PhysClimbing(float deltaTime, int32 Iterations
 		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / deltaTime;
 	}
 	
-	if(bLeavingClimbing)
+	if(bLeavingClimbing || bCornering)
 	{
 		return;
 	}
@@ -605,12 +598,55 @@ void UAdventureMovementComponent::PhysClimbing(float deltaTime, int32 Iterations
 				CurrentRootMotion.Clear();
 				Velocity = FVector::ZeroVector;
 				bCanShimmy = false;
+
+				// check to corner out or in
+				if(ClimbingComponent->CanCornerOut(targetDirection, TargetClimbCornerLocation, TargetClimbCornerRotation))
+				{
+					bCornering = true;
+					
+					FName MontageSection = targetDirection > 0 ? TEXT("CornerOutRight") : TEXT("CornerOutLeft") ;
+					OnCornerStart.Broadcast(MontageSection);
+					
+					DisableCollision();
+					
+					float MontageDuration = CharacterOwner->PlayAnimMontage(ClimbCornerMontage, 1, MontageSection);					
+					GetWorld()->GetTimerManager().SetTimer(ClimbCornerTimerHandle, this, &UAdventureMovementComponent::FinishCorner, MontageDuration);
+				}
 			}
 		}
 	}
 		
 	/*FString Message = FString::Printf(TEXT("Horizontal Direction: %s"), *FString::SanitizeFloat(HorizontalDirection));
 	GEngine->AddOnScreenDebugMessage(1, 0, FColor::Blue, Message);*/
+}
+
+
+void UAdventureMovementComponent::LaunchToLedge()
+{
+	FVector LaunchVelocity;
+	if(ClimbingComponent->GetValidLaunchVelocity(ClimbingComponent->GetReachableGrabPoints(Acceleration.GetSafeNormal2D()), LaunchVelocity, GetGravityZ()))
+	{
+		CharacterOwner->LaunchCharacter(LaunchVelocity, true, true);
+		const FQuat Rotation = FRotationMatrix::MakeFromXZ(LaunchVelocity.GetSafeNormal2D(), FVector::UpVector).ToQuat();
+		FHitResult Hit;
+		SafeMoveUpdatedComponent(FVector::ZeroVector, Rotation, false, Hit);
+	}
+}
+
+void UAdventureMovementComponent::FinishCorner()
+{
+	bCornering = false;
+	EnableCollision();
+}
+
+void UAdventureMovementComponent::DisableCollision() const
+{
+	CharacterOwner->GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+}
+
+void UAdventureMovementComponent::EnableCollision() const
+{
+	CharacterOwner->GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 }
 
 void UAdventureMovementComponent::TryClimb(FVector InitialLocation, FRotator InitialRotation)
@@ -642,7 +678,7 @@ void UAdventureMovementComponent::DoClimbJump()
 		OnClimbUp.Broadcast();
 		
 		CharacterOwner->PlayAnimMontage(ClimbUpMontage);
-		CharacterOwner->GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		DisableCollision();
 	}
 }
 
@@ -673,7 +709,8 @@ void UAdventureMovementComponent::ExitClimbing()
 	bLeavingClimbing = false;
 	HorizontalDirection = 0;
 
-	CharacterOwner->GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	EnableCollision();
+	GetWorld()->GetTimerManager().ClearTimer(ClimbCornerTimerHandle);
 }
 
 #pragma endregion
@@ -748,7 +785,7 @@ float UAdventureMovementComponent::GetMaxBrakingDeceleration() const
 
 void UAdventureMovementComponent::PhysicsRotation(float DeltaTime)
 {
-	if(IsCustomMovementMode(CMOVE_Climbing))
+	if(IsCustomMovementMode(CMOVE_Climbing) || MovementMode == MOVE_Falling)
 	{
 		return;
 	}

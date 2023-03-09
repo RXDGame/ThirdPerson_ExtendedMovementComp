@@ -25,20 +25,23 @@ private:
 	FVector GetTraceOrigin() const;
 	
 	UPROPERTY(EditDefaultsOnly) TEnumAsByte<ETraceTypeQuery> TraceChannel;
-	UPROPERTY(EditDefaultsOnly) FVector TraceOrigin;	
-	UPROPERTY(EditDefaultsOnly) float CapsuleTraceRadius;
-	UPROPERTY(EditDefaultsOnly) float CapsuleTraceHeight;
-	UPROPERTY(EditDefaultsOnly) float MaxTraceDistance;
-	UPROPERTY(EditDefaultsOnly) float MaxTraceHeight;
-	UPROPERTY(EditDefaultsOnly) int TopTraceIterations;
-	UPROPERTY(EditDefaultsOnly) float MaxTopTraceDepth;
-	UPROPERTY(EditDefaultsOnly) float MinAllowedDepthToClimbUp;
-	UPROPERTY(EditDefaultsOnly, Category=Character) FVector OffsetFromLedge;
+	UPROPERTY(EditDefaultsOnly) FVector TraceOrigin = FVector(0,0,60);	
+	UPROPERTY(EditDefaultsOnly) float CapsuleTraceRadius = 30;
+	UPROPERTY(EditDefaultsOnly) float CapsuleTraceHeight = 50;
+	UPROPERTY(EditDefaultsOnly) float MaxTraceDistance = 100;
+	UPROPERTY(EditDefaultsOnly) float MaxTraceHeight = 50;
+	UPROPERTY(EditDefaultsOnly) int TopTraceIterations = 20;
+	UPROPERTY(EditDefaultsOnly) float MaxTopTraceDepth = 100;
+	UPROPERTY(EditDefaultsOnly) float MinAllowedDepthToClimbUp = 70;
+	UPROPERTY(EditDefaultsOnly, Category=Character) float ForwardOffsetFromLedge = 47.0f;
+	UPROPERTY(EditDefaultsOnly, Category=Character) float VerticalOffsetFromLedge = 52.0f;
 	UPROPERTY(EditDefaultsOnly, Category=Character) FVector ClimbUpOffset;
 	UPROPERTY(EditDefaultsOnly, Category=SideCasting) int SideIterations;
 	UPROPERTY(EditDefaultsOnly, Category=SideCasting) float MinSideDistance;
-	UPROPERTY(EditDefaultsOnly) float MaxRangeToFindLedge;
-	UPROPERTY(EditDefaultsOnly) float MaxJumpSpeed;
+	UPROPERTY(EditDefaultsOnly, Category=Corner) float CornerOutDepth;
+	UPROPERTY(EditDefaultsOnly, Category=Corner) float CornerInDepth;
+	UPROPERTY(EditDefaultsOnly) float MaxRangeToFindLedge = 700;
+	UPROPERTY(EditDefaultsOnly) float MaxJumpSpeed = 1000;
 
 	TObjectPtr<UCapsuleComponent> CapsuleComponent;
 
@@ -48,13 +51,14 @@ public:
 	UPROPERTY(EditAnywhere, Category=Debugging) bool DebugTrace;
 	
 	FHitResult GetForwardHit() const;
-	FHitResult GetTopHit(FHitResult forwardHit) const;
+	FHitResult GetTopHit(FHitResult forwardHit, FVector TraceDirection, FVector TraceStartOrigin) const;
 	bool FoundLedge(FHitResult &FwdHit, FHitResult &TopHit) const;
 	FVector GetCharacterLocationOnLedge(FHitResult FwdHit, FHitResult TopHit) const;
-	FRotator GetCharacterRotationOnLedge(FHitResult FwdHit);
+	FRotator GetCharacterRotationOnLedge(FHitResult FwdHit) const;
 
-	TArray<USceneComponent*> GetReachableGrabPoints() const;
+	TArray<USceneComponent*> GetReachableGrabPoints(FVector MoveDirection) const;
 	bool GetValidLaunchVelocity(TArray<USceneComponent*> GrabPoints,FVector& LaunchVelocity, float Gravity) const;
 	bool CanClimbUp(FVector& TargetClimbLocation) const;
 	bool CanMoveInDirection(float HorizontalDirection, AActor* CurrentLedgeActor, FVector& TargetEdgeLocation) const;
+	bool CanCornerOut(float MoveDirection, FVector& CornerLocation, FRotator& CornerRotation) const;
 };

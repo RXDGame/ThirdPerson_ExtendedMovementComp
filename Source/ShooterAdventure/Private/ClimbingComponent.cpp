@@ -8,6 +8,20 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 
+// Helper Macros
+#if 1
+float MacroDuration = 2.f;
+#define SLOG(x) GEngine->AddOnScreenDebugMessage(-1, MacroDuration ? MacroDuration : -1.f, FColor::Yellow, x);
+#define POINT(x, c) DrawDebugPoint(GetWorld(), x, 10, c, !MacroDuration, MacroDuration);
+#define LINE(x1, x2, c) DrawDebugLine(GetWorld(), x1, x2, c, !MacroDuration, MacroDuration);
+#define CAPSULE(x, c) DrawDebugCapsule(GetWorld(), x, 96, 42, FQuat::Identity, c, !MacroDuration, MacroDuration);
+#else
+#define SLOG(x)
+#define POINT(x, c)
+#define LINE(x1, x2, c)
+#define CAPSULE(x, c)
+#endif
+
 // Sets default values for this component's properties
 UClimbingComponent::UClimbingComponent()
 {
@@ -36,9 +50,12 @@ bool UClimbingComponent::IsPossibleToReach(const USceneComponent* Candidate, FVe
 	FHitResult HitResult;
 	HitResult.ImpactPoint = Candidate->GetComponentLocation();
 	HitResult.Normal = Candidate->GetForwardVector();
+	HitResult.ImpactNormal = Candidate->GetForwardVector();
+	const FVector EndLocation = GetCharacterLocationOnLedge(HitResult, HitResult);
+	CAPSULE(EndLocation, FColor::Blue);
 	if(UGameplayStatics::SuggestProjectileVelocity(GetWorld(), TossVelocity, GetOwner()->GetActorLocation(),
-		GetCharacterLocationOnLedge(HitResult, HitResult),	MaxJumpSpeed, true, 0, Gravity, ESuggestProjVelocityTraceOption::DoNotTrace,
-		FCollisionResponseParams::DefaultResponseParam, TArray<AActor*>(), true))
+		EndLocation,	MaxJumpSpeed, false, 0, Gravity, ESuggestProjVelocityTraceOption::DoNotTrace,
+		FCollisionResponseParams::DefaultResponseParam, TArray<AActor*>(), DebugTrace))
 	{
 		return true;
 	}
@@ -58,18 +75,17 @@ FHitResult UClimbingComponent::GetForwardHit() const
 	return Hit;
 }
 
-FHitResult UClimbingComponent::GetTopHit(FHitResult forwardHit) const
+FHitResult UClimbingComponent::GetTopHit(FHitResult forwardHit, FVector TraceDirection, FVector TraceStartOrigin) const
 {
 	FHitResult TopHit;
 	FCollisionQueryParams Params;
 
-	const FVector OwnerForward = GetOwner()->GetActorForwardVector();
-	const FVector StartTrace = GetTraceOrigin() + FVector::UpVector * MaxTraceHeight;
+	const FVector StartTrace = TraceStartOrigin + FVector::UpVector * MaxTraceHeight;
 	const float step = MaxTopTraceDepth / TopTraceIterations;
 	
 	for (int i=0; i< TopTraceIterations; i++)
 	{
-		FVector TraceStartIteration = StartTrace + OwnerForward * (i * step);
+		FVector TraceStartIteration = StartTrace + TraceDirection * (i * step);
 		FVector EndTrace = TraceStartIteration + FVector::DownVector * MaxTraceHeight * 2.f;
 		TArray<FHitResult> Hits;		
 		if(UKismetSystemLibrary::LineTraceMulti(GetWorld(), TraceStartIteration, EndTrace, TraceChannel, true,
@@ -96,7 +112,7 @@ bool UClimbingComponent::FoundLedge(FHitResult& FwdHit, FHitResult& TopHit) cons
 		return false;
 	}
 	
-	TopHit = GetTopHit(FwdHit);
+	TopHit = GetTopHit(FwdHit, GetOwner()->GetActorForwardVector(), GetTraceOrigin());
 	if(!TopHit.IsValidBlockingHit())
 	{
 		return false;
@@ -109,31 +125,36 @@ FVector UClimbingComponent::GetCharacterLocationOnLedge(FHitResult FwdHit, FHitR
 {
 	FVector TargetLocation = FwdHit.ImpactPoint;
 	TargetLocation.Z = TopHit.ImpactPoint.Z;
-	TargetLocation += FwdHit.Normal.GetSafeNormal2D() * OffsetFromLedge.X + FVector::DownVector * OffsetFromLedge.Z;
+	TargetLocation += FwdHit.Normal.GetSafeNormal2D() * ForwardOffsetFromLedge + FVector::DownVector * VerticalOffsetFromLedge;
 	
 	return TargetLocation;
 }
 
-FRotator UClimbingComponent::GetCharacterRotationOnLedge(FHitResult FwdHit)
+FRotator UClimbingComponent::GetCharacterRotationOnLedge(FHitResult FwdHit) const
 {
 	const FRotator TargetRotation = FRotationMatrix::MakeFromZX(FVector::UpVector, -FwdHit.Normal.GetSafeNormal2D()).Rotator();
 	return TargetRotation;
 }
 
-TArray<USceneComponent*> UClimbingComponent::GetReachableGrabPoints() const
+TArray<USceneComponent*> UClimbingComponent::GetReachableGrabPoints(FVector MoveDirection) const
 {
 	TArray<USceneComponent*> ClosestPoints;
 	TArray<FOverlapResult> Overlapped;
 	const FCollisionShape SphereShape = FCollisionShape::MakeSphere(MaxRangeToFindLedge);
 	if(GetWorld()->OverlapMultiByChannel(Overlapped, GetTraceOrigin(), FQuat::Identity, static_cast<ECollisionChannel>(TraceChannel.GetValue()), SphereShape))
 	{
+		const FVector CharLocation = GetOwner()->GetActorLocation();
 		for (FOverlapResult OverlapResult : Overlapped)
 		{
 			const ALedge* Ledge = Cast<ALedge>(OverlapResult.GetActor());
 			if(Ledge != nullptr)
 			{
 				USceneComponent* Candidate = Ledge->GetClosestPoint(GetOwner()->GetActorLocation());
-				ClosestPoints.Add(Candidate);
+				FVector LaunchDirection = Candidate->GetComponentLocation() - CharLocation;
+				if(FVector::DotProduct(MoveDirection.GetSafeNormal2D(), LaunchDirection.GetSafeNormal2D()) > 0.f)
+				{
+					ClosestPoints.Add(Candidate);
+				}
 			}
 		}
 	}
@@ -215,7 +236,7 @@ bool UClimbingComponent::CanMoveInDirection(float HorizontalDirection, AActor* C
 		}
 	}
 
-	StartTrace += ForwardVector * (OffsetFromLedge.X + 1.f);
+	StartTrace += ForwardVector * (ForwardOffsetFromLedge + 1.f);
 	EndTrace = StartTrace - RightVector * Direction * MinSideDistance;
 
 	if(UKismetSystemLibrary::CapsuleTraceMulti(GetWorld(), StartTrace, EndTrace, 1.f, CapsuleTraceHeight, TraceChannel, true,
@@ -230,6 +251,60 @@ bool UClimbingComponent::CanMoveInDirection(float HorizontalDirection, AActor* C
 				TargetEdgeLocation = GetCharacterLocationOnLedge(Hit, Hit);				
 				break;
 			}
+		}
+	}
+	
+	return false;
+}
+
+bool UClimbingComponent::CanCornerOut(float MoveDirection, FVector& CornerLocation, FRotator& CornerRotation) const
+{
+	if(FMath::Abs(MoveDirection) < 0.1f)
+	{
+		return false;
+	}
+	
+	float Direction = MoveDirection > 0.f ? 1.f : -1.f;
+	FVector ForwardVector = GetOwner()->GetActorForwardVector();
+	FVector RightVector = GetOwner()->GetActorRightVector();
+
+	FVector StartTrace = GetTraceOrigin() + RightVector * Direction * MinSideDistance * 2.f;
+	FVector EndTrace = StartTrace + ForwardVector * MaxTraceDistance;
+	
+	StartTrace += ForwardVector * (ForwardOffsetFromLedge + CornerOutDepth);
+	EndTrace = StartTrace - RightVector * Direction * MinSideDistance * 2.f;
+
+	TArray<FHitResult> Hits;
+	if(UKismetSystemLibrary::CapsuleTraceMulti(GetWorld(), StartTrace, EndTrace, 1.f, CapsuleTraceHeight, TraceChannel, true,
+		TArray<AActor*>(), DebugTrace ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None, Hits, true, FLinearColor::Blue))
+	{
+		float HeightDelta = 10000.0f;
+		FVector CurrentTopHitLocation = GetOwner()->GetActorLocation() + FVector::UpVector * VerticalOffsetFromLedge;
+		FHitResult SelectedTopHit;
+		FHitResult SelectedFwdHit;
+		for (FHitResult Hit : Hits)
+		{
+			FHitResult topHit = GetTopHit(Hit, - RightVector * Direction, StartTrace);
+			if(!topHit.IsValidBlockingHit())
+			{
+				continue;
+			}
+
+			float newHeightDelta = FMath::Abs(topHit.ImpactPoint.Z - CurrentTopHitLocation.Z);
+			if(newHeightDelta < HeightDelta)
+			{
+				SelectedTopHit = topHit;
+				SelectedFwdHit = Hit;
+				HeightDelta = newHeightDelta;
+			}
+		}
+
+		if(SelectedTopHit.IsValidBlockingHit())
+		{
+			CornerLocation = GetCharacterLocationOnLedge(SelectedFwdHit, SelectedTopHit);
+			CAPSULE(CornerLocation, FColor::Orange);
+			CornerRotation = GetCharacterRotationOnLedge(SelectedFwdHit);
+			return true;
 		}
 	}
 	

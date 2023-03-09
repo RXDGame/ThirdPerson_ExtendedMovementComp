@@ -19,7 +19,8 @@ enum ECustomMovementMode
 	CMOVE_Max		UMETA(Hidden),
 };
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FStartClimbUpDelegate);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FClimbingDelegate);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCornerDelegate, FName, WarpTargetName);
 
 /**
  * 
@@ -134,8 +135,13 @@ private:
 	FVector TargetInterpolateLocation;
 	FRotator TargetInterpolateRotation;
 	TObjectPtr<UClimbingComponent> ClimbingComponent;
+	FTimerHandle ClimbCornerTimerHandle;
 	
 	void PhysClimbing(float deltaTime, int32 Iterations);
+	void LaunchToLedge();
+	void FinishCorner();
+	void DisableCollision() const;
+	void EnableCollision() const;
 	
 public:	
 	UPROPERTY(BlueprintReadOnly, Category=Climbing)
@@ -144,25 +150,41 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category=Climbing)
 	FVector TargetClimbUpLocation;
 	
+	UPROPERTY(BlueprintReadOnly, Category=Climbing)
+	FVector TargetClimbCornerLocation;
+	
+	UPROPERTY(BlueprintReadOnly, Category=Climbing)
+	FRotator TargetClimbCornerRotation;
+	
 	UPROPERTY(EditDefaultsOnly, Category=Climbing)
 	UAnimMontage* ClimbUpMontage;
 	
 	UPROPERTY(EditDefaultsOnly, Category=Climbing)
 	UAnimMontage* DropClimbMontage;
 	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* ClimbCornerMontage;
+	
 	UPROPERTY(BlueprintAssignable)
-	FStartClimbUpDelegate OnClimbUp;
+	FClimbingDelegate OnClimbUp;
+	
+	UPROPERTY(BlueprintAssignable)
+	FCornerDelegate OnCornerStart;
 	
 	UPROPERTY(BlueprintReadOnly, Category=Climbing)
 	bool bCanShimmy;
+
+	UPROPERTY(BlueprintReadOnly, Category=Climbing)
+	bool bCornering;
 	
 	void TryClimb(FVector InitialLocation, FRotator InitialRotation);
 	void DoClimbJump();
 	void DropClimb();
 	void InterpolateToTarget(FVector Location, FRotator Rotation);
-
+	
 	UFUNCTION(BlueprintCallable)
 	void ExitClimbing();
+	
 public:
 	virtual bool IsMovingOnGround() const override;
 	virtual bool CanCrouchInCurrentState() const override;
