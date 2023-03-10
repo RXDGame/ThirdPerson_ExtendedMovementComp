@@ -4,13 +4,14 @@
 #include "ClimbingComponent.h"
 
 #include "Ledge.h"
+#include "MathUtil.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 // Helper Macros
 #if 1
-float MacroDuration = 2.f;
+float MacroDuration = 4.f;
 #define SLOG(x) GEngine->AddOnScreenDebugMessage(-1, MacroDuration ? MacroDuration : -1.f, FColor::Yellow, x);
 #define POINT(x, c) DrawDebugPoint(GetWorld(), x, 10, c, !MacroDuration, MacroDuration);
 #define LINE(x1, x2, c) DrawDebugLine(GetWorld(), x1, x2, c, !MacroDuration, MacroDuration);
@@ -53,8 +54,9 @@ bool UClimbingComponent::IsPossibleToReach(const USceneComponent* Candidate, FVe
 	HitResult.ImpactNormal = Candidate->GetForwardVector();
 	const FVector EndLocation = GetCharacterLocationOnLedge(HitResult, HitResult);
 	CAPSULE(EndLocation, FColor::Blue);
+	const bool bHighArc = EndLocation.Z < GetOwner()->GetActorLocation().Z; 
 	if(UGameplayStatics::SuggestProjectileVelocity(GetWorld(), TossVelocity, GetOwner()->GetActorLocation(),
-		EndLocation,	MaxJumpSpeed, false, 0, Gravity, ESuggestProjVelocityTraceOption::DoNotTrace,
+		EndLocation,	MaxJumpSpeed, bHighArc, 0, Gravity, ESuggestProjVelocityTraceOption::DoNotTrace,
 		FCollisionResponseParams::DefaultResponseParam, TArray<AActor*>(), DebugTrace))
 	{
 		return true;
@@ -151,7 +153,7 @@ TArray<USceneComponent*> UClimbingComponent::GetReachableGrabPoints(FVector Move
 			{
 				USceneComponent* Candidate = Ledge->GetClosestPoint(GetOwner()->GetActorLocation());
 				FVector LaunchDirection = Candidate->GetComponentLocation() - CharLocation;
-				if(FVector::DotProduct(MoveDirection.GetSafeNormal2D(), LaunchDirection.GetSafeNormal2D()) > 0.f)
+				if(FVector::DotProduct(MoveDirection.GetSafeNormal2D(), LaunchDirection.GetSafeNormal2D()) > FMath::Cos(FMath::DegreesToRadians(MaxAngleToLaunch)))
 				{
 					ClosestPoints.Add(Candidate);
 				}

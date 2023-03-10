@@ -42,6 +42,7 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category=Corner) float CornerInDepth;
 	UPROPERTY(EditDefaultsOnly) float MaxRangeToFindLedge = 700;
 	UPROPERTY(EditDefaultsOnly) float MaxJumpSpeed = 1000;
+	UPROPERTY(EditDefaultsOnly) float MaxAngleToLaunch = 60.f;
 
 	TObjectPtr<UCapsuleComponent> CapsuleComponent;
 

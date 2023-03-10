@@ -603,14 +603,11 @@ void UAdventureMovementComponent::PhysClimbing(float deltaTime, int32 Iterations
 				if(ClimbingComponent->CanCornerOut(targetDirection, TargetClimbCornerLocation, TargetClimbCornerRotation))
 				{
 					bCornering = true;
+					OnCornerStart.Broadcast();					
 					
-					FName MontageSection = targetDirection > 0 ? TEXT("CornerOutRight") : TEXT("CornerOutLeft") ;
-					OnCornerStart.Broadcast(MontageSection);
-					
-					DisableCollision();
-					
-					float MontageDuration = CharacterOwner->PlayAnimMontage(ClimbCornerMontage, 1, MontageSection);					
-					GetWorld()->GetTimerManager().SetTimer(ClimbCornerTimerHandle, this, &UAdventureMovementComponent::FinishCorner, MontageDuration);
+					UAnimMontage* MontageToPlay = targetDirection > 0 ? RightCornerOutMontage : LeftCornerOutMontage;
+					float Duration = CharacterOwner->PlayAnimMontage(MontageToPlay);
+					GetWorld()->GetTimerManager().SetTimer(ClimbCornerTimerHandle, this, &UAdventureMovementComponent::FinishCorner, Duration);
 				}
 			}
 		}
@@ -636,7 +633,6 @@ void UAdventureMovementComponent::LaunchToLedge()
 void UAdventureMovementComponent::FinishCorner()
 {
 	bCornering = false;
-	EnableCollision();
 }
 
 void UAdventureMovementComponent::DisableCollision() const

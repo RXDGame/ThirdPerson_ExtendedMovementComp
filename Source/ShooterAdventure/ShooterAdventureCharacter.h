@@ -13,10 +13,6 @@ class AShooterAdventureCharacter : public ACharacter
 {
 	GENERATED_BODY()
 
-protected:
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Movement)
-	class UAdventureMovementComponent* AdventureMovementComponent;
-
 private:
 
 	/** Camera boom positioning the camera behind the character */
@@ -63,6 +59,10 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputAction* DropClimbAction;	
 
+protected:
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Movement)
+	class UAdventureMovementComponent* AdventureMovementComponent;
+	
 public:
 	AShooterAdventureCharacter(const FObjectInitializer& ObjectInitializer);
 	TObjectPtr<UClimbingComponent> ClimbingComponent;

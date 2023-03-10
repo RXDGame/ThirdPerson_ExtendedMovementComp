@@ -20,7 +20,6 @@ enum ECustomMovementMode
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FClimbingDelegate);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCornerDelegate, FName, WarpTargetName);
 
 /**
  * 
@@ -163,13 +162,22 @@ public:
 	UAnimMontage* DropClimbMontage;
 	
 	UPROPERTY(EditDefaultsOnly, Category=Climbing)
-	UAnimMontage* ClimbCornerMontage;
+	UAnimMontage* RightCornerOutMontage;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* LeftCornerOutMontage;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* RightCornerInMontage;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* LeftCornerInMontage;
 	
 	UPROPERTY(BlueprintAssignable)
 	FClimbingDelegate OnClimbUp;
 	
 	UPROPERTY(BlueprintAssignable)
-	FCornerDelegate OnCornerStart;
+	FClimbingDelegate OnCornerStart;
 	
 	UPROPERTY(BlueprintReadOnly, Category=Climbing)
 	bool bCanShimmy;
