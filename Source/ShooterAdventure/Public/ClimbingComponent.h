@@ -35,23 +35,32 @@ private:
 	UPROPERTY(EditDefaultsOnly) float MinAllowedDepthToClimbUp = 70;
 	UPROPERTY(EditDefaultsOnly, Category=Character) float ForwardOffsetFromLedge = 47.0f;
 	UPROPERTY(EditDefaultsOnly, Category=Character) float VerticalOffsetFromLedge = 52.0f;
-	UPROPERTY(EditDefaultsOnly, Category=Character) FVector ClimbUpOffset;
-	UPROPERTY(EditDefaultsOnly, Category=SideCasting) int SideIterations;
-	UPROPERTY(EditDefaultsOnly, Category=SideCasting) float MinSideDistance;
-	UPROPERTY(EditDefaultsOnly, Category=Corner) float CornerOutDepth;
-	UPROPERTY(EditDefaultsOnly, Category=Corner) float CornerInDepth;
-	UPROPERTY(EditDefaultsOnly) float MaxRangeToFindLedge = 700;
+	UPROPERTY(EditDefaultsOnly, Category=Character) FVector ClimbUpOffset = FVector(-50,0,0);
+	UPROPERTY(EditDefaultsOnly, Category=SideCasting) int SideIterations = 20;
+	UPROPERTY(EditDefaultsOnly, Category=SideCasting) float MinSideDistance = 40.f;
+	UPROPERTY(EditDefaultsOnly, Category=Corner) float CornerOutDepth = 50.f;
+	UPROPERTY(EditDefaultsOnly, Category=Corner) float CornerInDepth = 50.f;
+	UPROPERTY(EditDefaultsOnly, Category=Launch) float MaxRangeToFindLedge = 700;
 	UPROPERTY(EditDefaultsOnly) float MaxJumpSpeed = 1000;
 	UPROPERTY(EditDefaultsOnly) float MaxAngleToLaunch = 60.f;
+	
+public:
+	UPROPERTY(EditAnywhere, Category=Debugging) bool DebugTrace = false;
+	
+private:	
+	UPROPERTY(EditDefaultsOnly, Category=ClimbJump) float MaxJumpUpHeight = 200.f;
+	UPROPERTY(EditDefaultsOnly, Category=ClimbJump) float MaxHopUpHeight = 100.f;
+	UPROPERTY(EditDefaultsOnly, Category=ClimbJump) float MaxJumpUpVelocity = 400.f;
+	UPROPERTY(EditDefaultsOnly, Category=Launch) float MinDistanceToSuggestVelocity = 150.f;
+	UPROPERTY(EditDefaultsOnly, Category=ClimbJump) float MaxSideJumpDistance = 1500.f;
 
 	TObjectPtr<UCapsuleComponent> CapsuleComponent;
 
 	bool IsPossibleToReach(const USceneComponent* Candidate, FVector& TossVelocity, float Gravity) const;
 	
 public:
-	UPROPERTY(EditAnywhere, Category=Debugging) bool DebugTrace;
 	
-	FHitResult GetForwardHit() const;
+	FHitResult GetForwardHit(FVector TraceStartOrigin, FVector TraceDirection, float TraceHeight) const;
 	FHitResult GetTopHit(FHitResult forwardHit, FVector TraceDirection, FVector TraceStartOrigin) const;
 	bool FoundLedge(FHitResult &FwdHit, FHitResult &TopHit) const;
 	FVector GetCharacterLocationOnLedge(FHitResult FwdHit, FHitResult TopHit) const;
@@ -62,4 +71,7 @@ public:
 	bool CanClimbUp(FVector& TargetClimbLocation) const;
 	bool CanMoveInDirection(float HorizontalDirection, AActor* CurrentLedgeActor, FVector& TargetEdgeLocation) const;
 	bool CanCornerOut(float MoveDirection, FVector& CornerLocation, FRotator& CornerRotation) const;
+	bool CanHopUp(FVector& TargetLocation) const;
+	bool FoundSideLedge(AActor* CurrentLedge, FVector SideDirection, FVector& TargetLocation)  const;
+	FVector GetJumpUpVelocity() const;
 };

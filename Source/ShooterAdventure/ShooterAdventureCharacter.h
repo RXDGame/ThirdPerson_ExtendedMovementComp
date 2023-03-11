@@ -63,9 +63,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Movement)
 	class UAdventureMovementComponent* AdventureMovementComponent;
 	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Climbing)
+	UClimbingComponent* ClimbingComponent;
+	
 public:
 	AShooterAdventureCharacter(const FObjectInitializer& ObjectInitializer);
-	TObjectPtr<UClimbingComponent> ClimbingComponent;
 		
 protected:
 

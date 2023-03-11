@@ -65,14 +65,14 @@ bool UClimbingComponent::IsPossibleToReach(const USceneComponent* Candidate, FVe
 	return false;
 }
 
-FHitResult UClimbingComponent::GetForwardHit() const
+FHitResult UClimbingComponent::GetForwardHit(FVector TraceStartOrigin, FVector TraceDirection, float TraceHeight) const
 {
 	FHitResult Hit;
 
-	const FVector StartTrace = GetTraceOrigin();
-	const FVector EndTrace = StartTrace + GetOwner()->GetActorForwardVector() * MaxTraceDistance;
-	UKismetSystemLibrary::CapsuleTraceSingle(GetWorld(), StartTrace, EndTrace, CapsuleTraceRadius, CapsuleTraceHeight, TraceChannel, false,
-		TArray<AActor*>(), DebugTrace ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None, Hit, true);
+	const FVector StartTrace = TraceStartOrigin;
+	const FVector EndTrace = StartTrace + TraceDirection * MaxTraceDistance;
+	UKismetSystemLibrary::CapsuleTraceSingle(GetWorld(), StartTrace, EndTrace, CapsuleTraceRadius, TraceHeight, TraceChannel, false,
+		TArray<AActor*>(), DebugTrace ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None, Hit, true);
 
 	return Hit;
 }
@@ -91,7 +91,7 @@ FHitResult UClimbingComponent::GetTopHit(FHitResult forwardHit, FVector TraceDir
 		FVector EndTrace = TraceStartIteration + FVector::DownVector * MaxTraceHeight * 2.f;
 		TArray<FHitResult> Hits;		
 		if(UKismetSystemLibrary::LineTraceMulti(GetWorld(), TraceStartIteration, EndTrace, TraceChannel, true,
-			TArray<AActor*>(), DebugTrace ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None, Hits, true, FLinearColor::Yellow))
+			TArray<AActor*>(), DebugTrace ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None, Hits, true, FLinearColor::Yellow))
 		{
 			for (auto Hit : Hits)
 			{
@@ -108,7 +108,7 @@ FHitResult UClimbingComponent::GetTopHit(FHitResult forwardHit, FVector TraceDir
 
 bool UClimbingComponent::FoundLedge(FHitResult& FwdHit, FHitResult& TopHit) const
 {	
-	FwdHit = GetForwardHit();
+	FwdHit = GetForwardHit(GetTraceOrigin(), GetOwner()->GetActorForwardVector(), CapsuleTraceHeight);
 	if(!FwdHit.IsValidBlockingHit())
 	{
 		return false;
@@ -164,15 +164,15 @@ TArray<USceneComponent*> UClimbingComponent::GetReachableGrabPoints(FVector Move
 	return ClosestPoints;
 }
 
-bool UClimbingComponent::GetValidLaunchVelocity(TArray<USceneComponent*> GrabPoints, FVector& LaunchVelocity, float Gravity) const
+bool UClimbingComponent::GetValidLaunchVelocity(TArray<USceneComponent*> GrabPoints, FVector& LaunchVelocity, const float Gravity) const
 {
-	const FVector CharacterLocation = GetOwner()->GetActorLocation();
+	const FVector GrabLocation = GetTraceOrigin();
 	float ClosestDistance = 1000000000000.f;
 	const USceneComponent* Destination = nullptr;
-	for (USceneComponent* Point : GrabPoints)
+	for (const USceneComponent* Point : GrabPoints)
 	{
-		const float distance = FVector::Distance(CharacterLocation, Point->GetComponentLocation());
-		if(distance < ClosestDistance)
+		const float distance = FVector::Distance(GrabLocation, Point->GetComponentLocation());
+		if(distance < ClosestDistance && distance > MinDistanceToSuggestVelocity)
 		{
 			FVector TossVelocity;
 			if(IsPossibleToReach(Point, TossVelocity, Gravity))
@@ -197,7 +197,7 @@ bool UClimbingComponent::CanClimbUp(FVector& TargetClimbLocation) const
 		if(GetWorld()->LineTraceSingleByChannel(GroundHit, Start, End, ECC_Visibility))
 		{			
 			TargetClimbLocation = GroundHit.ImpactPoint;
-			TargetClimbLocation += ClimbUpOffset.Y * GetOwner()->GetActorForwardVector();
+			TargetClimbLocation += ClimbUpOffset.X * GetOwner()->GetActorForwardVector();
 			TargetClimbLocation += FVector::UpVector * ClimbUpOffset.Z;
 
 			float CapsuleHalfHeight = CapsuleComponent->GetScaledCapsuleHalfHeight();
@@ -312,4 +312,88 @@ bool UClimbingComponent::CanCornerOut(float MoveDirection, FVector& CornerLocati
 	
 	return false;
 }
+
+bool UClimbingComponent::CanHopUp(FVector& TargetLocation) const
+{
+	const float Height = MaxHopUpHeight * 0.5f;
+	const FVector Origin = GetTraceOrigin() + FVector::UpVector * Height;
+	const FVector Forward = GetOwner()->GetActorForwardVector();
+	
+	FHitResult FwdHit = GetForwardHit(Origin, Forward, Height);
+	if(!FwdHit.IsValidBlockingHit())
+	{
+		return false;
+	}
+
+	FHitResult TopHit = GetTopHit(FwdHit, Forward, Origin);
+	if(!TopHit.IsValidBlockingHit())
+	{
+		return false;
+	}
+
+	TargetLocation = GetCharacterLocationOnLedge(FwdHit, TopHit);
+	
+	return true;
+}
+
+bool UClimbingComponent::FoundSideLedge(AActor* CurrentLedge, FVector SideDirection, FVector& TargetLocation) const
+{
+	FVector Forward = GetOwner()->GetActorForwardVector();
+	FVector FirstStartTrace = GetTraceOrigin() + SideDirection * CapsuleTraceRadius - Forward *10;
+	const int Iterations = MaxSideJumpDistance / (CapsuleTraceRadius * 2);
+	const float Step = MaxSideJumpDistance / Iterations;
+	for (int i=0; i <= Iterations; i++)
+	{
+		FVector StartTrace = FirstStartTrace + SideDirection * i * Step;
+		FHitResult FwdHit = GetForwardHit(StartTrace, Forward, MaxTraceHeight);
+		if(!FwdHit.IsValidBlockingHit() || FwdHit.GetActor() == CurrentLedge)
+		{
+			continue;
+		}
+
+		FHitResult TopHit = GetTopHit(FwdHit, Forward, StartTrace);
+		if(!TopHit.IsValidBlockingHit())
+		{
+			continue;
+		}
+
+		TargetLocation = GetCharacterLocationOnLedge(FwdHit, TopHit);
+		CAPSULE(TargetLocation, FColor::Green)
+		return true;
+	}
+	
+	return false;
+}
+
+FVector UClimbingComponent::GetJumpUpVelocity() const
+{
+	FVector DefaultVelocity = FVector::UpVector * MaxJumpUpVelocity;
+	
+	const float Height = MaxHopUpHeight * 0.5f;
+	const FVector Origin = GetTraceOrigin() + FVector::UpVector * Height;
+	const FVector Forward = GetOwner()->GetActorForwardVector();
+	
+	FHitResult FwdHit = GetForwardHit(Origin, Forward, Height);
+	if(!FwdHit.IsValidBlockingHit())
+	{
+		return DefaultVelocity;
+	}
+
+	FHitResult TopHit = GetTopHit(FwdHit, Forward, Origin);
+	if(!TopHit.IsValidBlockingHit())
+	{
+		return DefaultVelocity;
+	}
+
+	FVector StartLocation = GetOwner()->GetActorLocation();
+	FVector EndLocation = GetCharacterLocationOnLedge(FwdHit, TopHit);
+	FVector TossVelocity;
+	if(UGameplayStatics::SuggestProjectileVelocity(GetWorld(), TossVelocity, StartLocation, EndLocation, MaxJumpUpVelocity, false))
+	{
+		return TossVelocity;
+	}
+	
+	return DefaultVelocity;
+}
+
 

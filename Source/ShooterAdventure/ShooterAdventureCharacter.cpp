@@ -54,14 +54,13 @@ AShooterAdventureCharacter::AShooterAdventureCharacter(const FObjectInitializer&
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
+	ClimbingComponent = CreateDefaultSubobject<UClimbingComponent>(TEXT("Climbing Component"));	
 }
 
 void AShooterAdventureCharacter::BeginPlay()
 {
 	// Call the base class  
 	Super::BeginPlay();
-
-	ClimbingComponent = FindComponentByClass<UClimbingComponent>();
 
 	//Add Input Mapping Context
 	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
@@ -104,7 +103,7 @@ void AShooterAdventureCharacter::ClimbingUpdate()
 	}
 	else
 	{
-		if(AdventureMovementComponent->IsFalling())
+		if(AdventureMovementComponent->IsFalling() && AdventureMovementComponent->Velocity.Z <= 0)
 		{
 			FHitResult FwdHit;
 			FHitResult TopHit;
