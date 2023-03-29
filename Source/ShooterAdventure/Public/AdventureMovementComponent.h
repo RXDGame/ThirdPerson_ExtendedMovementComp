@@ -19,8 +19,6 @@ enum ECustomMovementMode
 	CMOVE_Max		UMETA(Hidden),
 };
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FClimbingDelegate);
-
 /**
  * 
  */
@@ -83,7 +81,6 @@ private:
 public:
 	UAdventureMovementComponent();
 	virtual void InitializeComponent() override;
-	virtual bool DoJump(bool bReplayingMoves) override;
 	
 // SPRINT
 private:
@@ -128,86 +125,7 @@ private:
 
 	// CLIMBING
 private:
-	UPROPERTY(EditDefaultsOnly, Category=Climbing) float InterpSpeed = 100.f;
-	bool bIsInterpolating;
-	bool bLeavingClimbing;
-	FVector TargetInterpolateLocation;
-	FRotator TargetInterpolateRotation;
-	AActor* CurrentLedge;
-	TObjectPtr<UClimbingComponent> ClimbingComponent;
-	FTimerHandle WarpTimerHandle;
-
-	void StopShimmy();
 	void PhysClimbing(float deltaTime, int32 Iterations);
-	void UpdateClimbingAfterMovement();
-	void LaunchToLedge();
-	bool TryCornerOut(float Direction);
-	void ClimbUp();
-	void JumpUp();
-	void JumpSide(float HorDirection);
-
-	void SetMotionWarpingTimer(float Duration);
-	void FinishWarping();
-	
-public:	
-	UPROPERTY(BlueprintReadOnly, Category=Climbing)
-	float HorizontalDirection;
-	
-	UPROPERTY(BlueprintReadOnly, Category=Climbing)
-	FVector MotionWarpLocation;
-	
-	UPROPERTY(BlueprintReadOnly, Category=Climbing)
-	FRotator MotionWarpRotation;
-	
-	UPROPERTY(EditDefaultsOnly, Category=Climbing)
-	UAnimMontage* ClimbUpMontage;
-	
-	UPROPERTY(EditDefaultsOnly, Category=Climbing)
-	UAnimMontage* DropClimbMontage;
-	
-	UPROPERTY(EditDefaultsOnly, Category=Climbing)
-	UAnimMontage* RightCornerOutMontage;
-	
-	UPROPERTY(EditDefaultsOnly, Category=Climbing)
-	UAnimMontage* LeftCornerOutMontage;
-	
-	UPROPERTY(EditDefaultsOnly, Category=Climbing)
-	UAnimMontage* RightCornerInMontage;
-	
-	UPROPERTY(EditDefaultsOnly, Category=Climbing)
-	UAnimMontage* LeftCornerInMontage;
-	
-	UPROPERTY(EditDefaultsOnly, Category=Climbing)
-	UAnimMontage* HopUpMontage;
-		
-	UPROPERTY(BlueprintAssignable)
-	FClimbingDelegate OnClimbUp;
-	
-	UPROPERTY(BlueprintAssignable)
-	FClimbingDelegate OnCornerStart;
-	
-	UPROPERTY(BlueprintAssignable)
-	FClimbingDelegate OnClimbJumpStart;
-	
-	UPROPERTY(BlueprintReadOnly, Category=Climbing)
-	bool bCanShimmy = true;
-
-	UPROPERTY(BlueprintReadOnly, Category=Climbing)
-	bool bInMotionWarping = false;
-	
-	UPROPERTY(EditDefaultsOnly, Category=Climbing)
-	UAnimMontage* ClimbJumpRightMontage;
-	
-	UPROPERTY(EditDefaultsOnly, Category=Climbing)
-	UAnimMontage* ClimbJumpLeftMontage;
-	
-	void TryClimb(FVector InitialLocation, FRotator InitialRotation);
-	void DoClimbJump();
-	void DropClimb();
-	void InterpolateToTarget(FVector Location, FRotator Rotation);
-	
-	UFUNCTION(BlueprintCallable)
-	void ExitClimbing();
 	
 public:
 	virtual bool IsMovingOnGround() const override;

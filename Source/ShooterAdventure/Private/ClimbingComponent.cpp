@@ -4,7 +4,6 @@
 #include "ClimbingComponent.h"
 
 #include "Ledge.h"
-#include "MathUtil.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -53,16 +52,25 @@ bool UClimbingComponent::IsPossibleToReach(const USceneComponent* Candidate, FVe
 	HitResult.Normal = Candidate->GetForwardVector();
 	HitResult.ImpactNormal = Candidate->GetForwardVector();
 	const FVector EndLocation = GetCharacterLocationOnLedge(HitResult, HitResult);
-	CAPSULE(EndLocation, FColor::Blue);
-	const bool bHighArc = EndLocation.Z < GetOwner()->GetActorLocation().Z; 
-	if(UGameplayStatics::SuggestProjectileVelocity(GetWorld(), TossVelocity, GetOwner()->GetActorLocation(),
-		EndLocation,	MaxJumpSpeed, bHighArc, 0, Gravity, ESuggestProjVelocityTraceOption::DoNotTrace,
-		FCollisionResponseParams::DefaultResponseParam, TArray<AActor*>(), DebugTrace))
+	if(FoundSuggestVelocity(TossVelocity, GetOwner()->GetActorLocation(), EndLocation, MaxJumpSpeed, Gravity))
 	{
 		return true;
 	}
 
 	return false;
+}
+
+bool UClimbingComponent::FoundSuggestVelocity(FVector& TossVelocity, FVector StartLocation, FVector EndLocation, float MaxSpeed, float Gravity) const
+{
+	if(DebugTrace)
+	{
+		CAPSULE(EndLocation, FColor::Blue);
+	}
+	
+	const bool bHighArc = EndLocation.Z < GetOwner()->GetActorLocation().Z; 
+	return UGameplayStatics::SuggestProjectileVelocity(GetWorld(), TossVelocity, StartLocation,
+		EndLocation, MaxSpeed, bHighArc, 0, Gravity, ESuggestProjVelocityTraceOption::DoNotTrace,
+		FCollisionResponseParams::DefaultResponseParam, TArray<AActor*>(), DebugTrace);
 }
 
 FHitResult UClimbingComponent::GetForwardHit(FVector TraceStartOrigin, FVector TraceDirection, float TraceHeight) const
@@ -336,7 +344,7 @@ bool UClimbingComponent::CanHopUp(FVector& TargetLocation) const
 	return true;
 }
 
-bool UClimbingComponent::FoundSideLedge(AActor* CurrentLedge, FVector SideDirection, FVector& TargetLocation) const
+bool UClimbingComponent::FoundSideLedge(AActor* CurrentLedge, FVector SideDirection, FVector& LaunchSpeed, float Gravity, float& Duration) const
 {
 	FVector Forward = GetOwner()->GetActorForwardVector();
 	FVector FirstStartTrace = GetTraceOrigin() + SideDirection * CapsuleTraceRadius - Forward *10;
@@ -357,15 +365,29 @@ bool UClimbingComponent::FoundSideLedge(AActor* CurrentLedge, FVector SideDirect
 			continue;
 		}
 
-		TargetLocation = GetCharacterLocationOnLedge(FwdHit, TopHit);
-		CAPSULE(TargetLocation, FColor::Green)
-		return true;
+		ALedge* Ledge = Cast<ALedge>(TopHit.GetActor());
+		if(Ledge != nullptr)
+		{
+			USceneComponent* ClosestPoint = Ledge->GetClosestPoint(TopHit.ImpactPoint);
+			TopHit.ImpactPoint = ClosestPoint->GetComponentLocation();
+			FwdHit.Normal = ClosestPoint->GetForwardVector();
+		}
+
+		FVector StartLocation = GetOwner()->GetActorLocation();
+		FVector EndLocation = GetCharacterLocationOnLedge(FwdHit, TopHit);
+		if(FoundSuggestVelocity(LaunchSpeed, StartLocation, EndLocation, MaxJumpSpeed, Gravity))
+		{
+			float MaxHeight = -FMath::Pow(LaunchSpeed.Y, 2) / (2*Gravity);
+			float DisplacementY = (EndLocation - StartLocation).Y;
+			Duration = FMath::Sqrt(-2 * MaxHeight / Gravity) + FMath::Sqrt(2 * (DisplacementY - MaxHeight) / Gravity);			
+			return true;
+		}
 	}
 	
 	return false;
 }
 
-FVector UClimbingComponent::GetJumpUpVelocity() const
+FVector UClimbingComponent::GetJumpUpVelocity(float Gravity) const
 {
 	FVector DefaultVelocity = FVector::UpVector * MaxJumpUpVelocity;
 	
@@ -388,7 +410,7 @@ FVector UClimbingComponent::GetJumpUpVelocity() const
 	FVector StartLocation = GetOwner()->GetActorLocation();
 	FVector EndLocation = GetCharacterLocationOnLedge(FwdHit, TopHit);
 	FVector TossVelocity;
-	if(UGameplayStatics::SuggestProjectileVelocity(GetWorld(), TossVelocity, StartLocation, EndLocation, MaxJumpUpVelocity, false))
+	if(FoundSuggestVelocity(TossVelocity, StartLocation, EndLocation, MaxJumpUpVelocity, Gravity))
 	{
 		return TossVelocity;
 	}

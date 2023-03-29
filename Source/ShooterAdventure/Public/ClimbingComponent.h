@@ -57,7 +57,7 @@ private:
 	TObjectPtr<UCapsuleComponent> CapsuleComponent;
 
 	bool IsPossibleToReach(const USceneComponent* Candidate, FVector& TossVelocity, float Gravity) const;
-	
+	bool FoundSuggestVelocity(FVector& TossVelocity, FVector StartLocation, FVector EndLocation, float MaxSpeed, float Gravity) const;
 public:
 	
 	FHitResult GetForwardHit(FVector TraceStartOrigin, FVector TraceDirection, float TraceHeight) const;
@@ -72,6 +72,35 @@ public:
 	bool CanMoveInDirection(float HorizontalDirection, AActor* CurrentLedgeActor, FVector& TargetEdgeLocation) const;
 	bool CanCornerOut(float MoveDirection, FVector& CornerLocation, FRotator& CornerRotation) const;
 	bool CanHopUp(FVector& TargetLocation) const;
-	bool FoundSideLedge(AActor* CurrentLedge, FVector SideDirection, FVector& TargetLocation)  const;
-	FVector GetJumpUpVelocity() const;
+	bool FoundSideLedge(AActor* CurrentLedge, FVector SideDirection, FVector& LaunchSpeed, float Gravity, float& Duration)  const;
+	FVector GetJumpUpVelocity(float Gravity) const;
+
+	// Montages
+public:		
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* ClimbUpMontage;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* DropClimbMontage;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* RightCornerOutMontage;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* LeftCornerOutMontage;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* RightCornerInMontage;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* LeftCornerInMontage;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* HopUpMontage;
+
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* ClimbJumpRightMontage;
+	
+	UPROPERTY(EditDefaultsOnly, Category=Climbing)
+	UAnimMontage* ClimbJumpLeftMontage;
 };
