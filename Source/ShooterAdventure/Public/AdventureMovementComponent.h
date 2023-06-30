@@ -86,19 +86,6 @@ public:
 private:
 	UPROPERTY(EditDefaultsOnly, Category=Sprint) float MaxSprintSpeed;
 
-// SLIDE
-private:
-	UPROPERTY(EditDefaultsOnly, Category=Slide) float MaxSlideSpeed = 300.f;
-	UPROPERTY(EditDefaultsOnly, Category=Slide) float Slide_EnterImpulse = 500.f;
-	UPROPERTY(EditDefaultsOnly, Category=Slide) float Slide_GravityForce = 5000.f;
-	UPROPERTY(EditDefaultsOnly, Category=Slide) float Slide_Friction = 1.3f;	
-	UPROPERTY(EditDefaultsOnly, Category=Slide) float BrakingDecelerationSliding = 500.f;
-	
-	void EnterSlide();
-	void ExitSlide();
-	void PhysSlide(float deltaTime, int32 Iterations);
-	bool GetSlideSurface(FHitResult& Hit) const;
-
 // ROLL
 public:
 	void TryEnterRoll(){ Safe_bWantsToRoll = true;}

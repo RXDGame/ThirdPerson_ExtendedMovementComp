@@ -108,111 +108,6 @@ void UAdventureMovementComponent::InitializeComponent()
 	AdventureCharacterOwner = Cast<AShooterAdventureCharacter>(GetOwner());
 }
 
-#pragma region Slide
-
-void UAdventureMovementComponent::EnterSlide()
-{
-	bWantsToCrouch = true;
-	bCrouchMaintainsBaseLocation = true;
-	
-	Velocity += Velocity.GetSafeNormal2D() * Slide_EnterImpulse;
-	SetMovementMode(MOVE_Custom, CMOVE_Slide);
-}
-
-void UAdventureMovementComponent::ExitSlide()
-{
-	bWantsToCrouch = false;
-
-	const FQuat NewRotation = FRotationMatrix::MakeFromXZ(UpdatedComponent->GetForwardVector().GetSafeNormal2D(),
-															FVector::UpVector).ToQuat();
-	FHitResult Hit;
-	SafeMoveUpdatedComponent(FVector::ZeroVector, NewRotation, true, Hit);
-	SetMovementMode(MOVE_Walking);
-}
-
-void UAdventureMovementComponent::PhysSlide(float deltaTime, int32 Iterations)
-{
-	if(deltaTime < MIN_TICK_TIME)
-	{
-		return;
-	}
-
-	RestorePreAdditiveRootMotionVelocity();
-
-	FHitResult SurfaceHit;
-	if(!GetSlideSurface(SurfaceHit))
-	{
-		ExitSlide();
-		StartNewPhysics(deltaTime, Iterations);
-		return;
-	}
-
-	// Surface gravity
-	Velocity += Slide_GravityForce * deltaTime * FVector::DownVector;
-
-	// Strafe
-	// check if player has pressed horizontal input enough to make character moves right or left
-	// Acceleration is like the world input vector
-	if(FMath::Abs(FVector::DotProduct(Acceleration.GetSafeNormal(), UpdatedComponent->GetRightVector())) > 0.5f)
-	{
-		Acceleration = Acceleration.ProjectOnTo(UpdatedComponent->GetRightVector());
-	}
-	else
-	{
-		Acceleration = FVector::ZeroVector;
-	}
-
-	if(!HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity())
-	{
-		CalcVelocity(deltaTime, Slide_Friction, false, GetMaxBrakingDeceleration());
-	}
-	ApplyRootMotionToVelocity(deltaTime);
-
-	// Perform Move
-	Iterations++;
-	bJustTeleported = false;
-
-	// cache old transform
-	FVector OldLocation = UpdatedComponent->GetComponentLocation();
-	FQuat OldRotation = UpdatedComponent->GetComponentRotation().Quaternion();
-
-	FHitResult Hit(1.0f);
-	FVector AdjustedLocation = Velocity * deltaTime;
-	FVector VelPlaneDir = FVector::VectorPlaneProject(Velocity, SurfaceHit.Normal).GetSafeNormal();
-	FQuat NewRotation = FRotationMatrix::MakeFromXZ(VelPlaneDir, SurfaceHit.Normal).ToQuat();
-
-	SafeMoveUpdatedComponent(AdjustedLocation, NewRotation, true, Hit);
-
-	if(Hit.Time < 1.0f)
-	{
-		HandleImpact(Hit, deltaTime, AdjustedLocation);
-		SlideAlongSurface(AdjustedLocation, (1.f - Hit.Time), Hit.Normal,Hit, true);
-	}
-
-	FHitResult NewSurfaceHit;
-	if(!GetSlideSurface(NewSurfaceHit))
-	{
-		ExitSlide();
-	}
-
-	// Update outgoing velocity and acceleration
-	if(!bJustTeleported && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity())
-	{
-		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / deltaTime; // v = dx / dt
-	}
-}
-
-bool UAdventureMovementComponent::GetSlideSurface(FHitResult& Hit) const
-{
-	const FVector Start = UpdatedComponent->GetComponentLocation();
-	const FVector End = Start + AdventureCharacterOwner->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() * 3.f * FVector::DownVector;
-	const FName ProfileName = TEXT("NoCollision");
-
-	return false;//GetWorld()->LineTraceSingleByProfile(Hit, Start, End, ProfileName, AdventureCharacterOwner->GetIgnoreCharacterParam());
-}
-
-#pragma endregion
-
 #pragma region Roll
 void UAdventureMovementComponent::EnterRoll(EMovementMode PreviousMovementMode, ECustomMovementMode PreviousCustomMode)
 {
@@ -593,8 +488,6 @@ float UAdventureMovementComponent::GetMaxSpeed() const
 
 	switch (CustomMovementMode)
 	{
-	case CMOVE_Slide:
-		return MaxSlideSpeed;
 	case  CMOVE_Roll:
 		return MaxRollSpeed;
 	case CMOVE_Climbing:
@@ -614,8 +507,6 @@ float UAdventureMovementComponent::GetMaxBrakingDeceleration() const
 
 	switch (CustomMovementMode)
 	{
-	case CMOVE_Slide:
-		return BrakingDecelerationSliding;
 	case  CMOVE_Roll:
 		return BrakingDecelerationRolling;
 	case CMOVE_Climbing:
@@ -651,12 +542,6 @@ void UAdventureMovementComponent::UpdateCharacterStateBeforeMovement(float Delta
 		}
 		Safe_bWantsToRoll = false;
 	}
-	
-	FHitResult HitResult;
-	if(GetSlideSurface(HitResult))
-	{
-		EnterSlide();
-	}
 }
 
 void UAdventureMovementComponent::OnMovementUpdated(float DeltaSeconds, const FVector& OldLocation, const FVector& OldVelocity)
@@ -677,9 +562,6 @@ void UAdventureMovementComponent::PhysCustom(float deltaTime, int32 Iterations)
 
 	switch (CustomMovementMode)
 	{
-	case CMOVE_Slide:
-		PhysSlide(deltaTime, Iterations);
-		break;
 	case CMOVE_Roll:
 		PhysRoll(deltaTime, Iterations);
 		break;
