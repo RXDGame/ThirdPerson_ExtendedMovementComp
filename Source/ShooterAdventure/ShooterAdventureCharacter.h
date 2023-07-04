@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "InputActionValue.h"
+#include "InputHandler.h"
 #include "ShooterAdventureCharacter.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FClimbingDelegate);
@@ -78,6 +79,9 @@ protected:
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Climbing)
 	UClimbingComponent* ClimbingComponent;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Climbing)
+	UInputHandler* InputHandler;
 	
 public:
 	AShooterAdventureCharacter(const FObjectInitializer& ObjectInitializer);
