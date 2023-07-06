@@ -55,7 +55,8 @@ AShooterAdventureCharacter::AShooterAdventureCharacter(const FObjectInitializer&
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
 	ClimbingComponent = CreateDefaultSubobject<UClimbingComponent>(TEXT("Climbing Component"));	
-	InputHandler = CreateDefaultSubobject<UInputHandler>(TEXT("Input Handler"));	
+	InputHandler = CreateDefaultSubobject<UInputHandler>(TEXT("Input Handler"));
+	StateMachine = CreateDefaultSubobject<UStateMachine>(TEXT("State Machine"));	
 }
 
 void AShooterAdventureCharacter::BeginPlay()

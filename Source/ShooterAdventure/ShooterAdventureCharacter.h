@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "InputActionValue.h"
 #include "InputHandler.h"
+#include "StateMachine.h"
 #include "ShooterAdventureCharacter.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FClimbingDelegate);
@@ -80,8 +81,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Climbing)
 	UClimbingComponent* ClimbingComponent;
 	
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Climbing)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Input)
 	UInputHandler* InputHandler;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = StateMachine)
+	UStateMachine* StateMachine;
 	
 public:
 	AShooterAdventureCharacter(const FObjectInitializer& ObjectInitializer);
